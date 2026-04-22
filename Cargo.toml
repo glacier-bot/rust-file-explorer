@@ -1,0 +1,11 @@
+[package]
+name = "rfe"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+colored = "2.1"
+dirs = "5.0"
+unicode-width = "0.1"
+open = "5.0"
+rustyline = "12.0"
