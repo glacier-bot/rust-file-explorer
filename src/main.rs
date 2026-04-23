@@ -1,3 +1,4 @@
+use arboard::Clipboard;
 use colored::*;
 use rustyline::completion::{Completer, FilenameCompleter, Pair};
 use rustyline::error::ReadlineError;
@@ -40,7 +41,26 @@ impl Completer for RfeHelper {
 }
 
 impl Helper for RfeHelper {}
-impl Highlighter for RfeHelper {}
+impl Highlighter for RfeHelper {
+    fn highlight_prompt<'b, 's: 'b, 'p: 'b>(
+        &'s self,
+        prompt: &'p str,
+        _default: bool,
+    ) -> std::borrow::Cow<'b, str> {
+        if prompt.starts_with("rfe ") && prompt.ends_with(" >") {
+            let dir = &prompt[4..prompt.len() - 2];
+            let colored = format!(
+                "{} {} {}",
+                "rfe".bright_green().bold(),
+                dir.bright_blue().bold(),
+                ">".bright_blue().bold()
+            );
+            std::borrow::Cow::Owned(colored)
+        } else {
+            std::borrow::Cow::Borrowed(prompt)
+        }
+    }
+}
 impl Hinter for RfeHelper {
     type Hint = String;
 }
@@ -219,8 +239,11 @@ fn print_welcome() {
     println!("{}", "Commands:".bright_yellow());
     println!("  {}  - List directory contents", "ls".cyan());
     println!("  {}  - Print working directory", "pwd".cyan());
+    println!("  {}  - Copy current directory path to clipboard", "cppwd".cyan());
+    println!("  {}  - Copy file absolute path to clipboard", "cpf <file>".cyan());
     println!("  {}  - Change directory", "cd <path>".cyan());
     println!("  {}  - Open file with default application", "open <file>".cyan());
+    println!("  {}  - Move/copy file or folder (use --cp to copy)", "mv <source> <dest> [--cp]".cyan());
     println!("  {} - Exit the program", "exit".cyan());
     println!("  {} - Clear the screen", "clear".cyan());
     println!("  {}  - Show this help", "help".cyan());
@@ -234,16 +257,61 @@ fn get_prompt_string() -> String {
         .and_then(|n| n.to_str())
         .unwrap_or("/");
 
-    format!(
-        "{} {} >",
-        "rfe".bright_green().bold(),
-        dir_str.bright_blue().bold()
-    )
+    format!("rfe {} >", dir_str)
 }
 
 fn cmd_pwd() -> Result<(), Box<dyn std::error::Error>> {
     let current_dir = env::current_dir()?;
     println!("{}", current_dir.display().to_string().bright_cyan());
+    Ok(())
+}
+
+fn cmd_cppwd() -> Result<(), Box<dyn std::error::Error>> {
+    let cwd = env::current_dir()?;
+    let path_str = cwd.to_string_lossy().to_string();
+
+    let mut clipboard = Clipboard::new()
+        .map_err(|e| format!("failed to access system clipboard: {}", e))?;
+    clipboard
+        .set_text(&path_str)
+        .map_err(|e| format!("failed to copy to clipboard: {}", e))?;
+
+    println!("{} {}", "✔ Copied to clipboard:".bright_green(), path_str.cyan());
+    Ok(())
+}
+
+fn cmd_cpf(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let path = PathBuf::from(file_path);
+
+    if !path.exists() {
+        return Err(format!("file does not exist: {}", file_path).into());
+    }
+
+    if !path.is_file() {
+        return Err(format!("not a file: {}", file_path).into());
+    }
+
+    let abs_path = fs::canonicalize(&path)
+        .map_err(|e| format!("failed to resolve absolute path: {}", e))?;
+
+    let path_str = if cfg!(windows) {
+        let s = abs_path.to_string_lossy().to_string();
+        if s.starts_with(r"\\?\") {
+            s[4..].to_string()
+        } else {
+            s
+        }
+    } else {
+        abs_path.to_string_lossy().to_string()
+    };
+
+    let mut clipboard = Clipboard::new()
+        .map_err(|e| format!("failed to access system clipboard: {}", e))?;
+    clipboard
+        .set_text(&path_str)
+        .map_err(|e| format!("failed to copy to clipboard: {}", e))?;
+
+    println!("{} {}", "✔ Copied to clipboard:".bright_green(), path_str.cyan());
     Ok(())
 }
 
@@ -434,6 +502,108 @@ fn cmd_clear() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn copy_dir_recursive(source: &Path, destination: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    fs::create_dir_all(destination)?;
+
+    for entry in fs::read_dir(source)? {
+        let entry = entry?;
+        let entry_type = entry.file_type()?;
+        let entry_path = entry.path();
+        let dest_path = destination.join(entry.file_name());
+
+        if entry_type.is_dir() {
+            copy_dir_recursive(&entry_path, &dest_path)?;
+        } else {
+            fs::copy(&entry_path, &dest_path)?;
+            
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let metadata = fs::metadata(&entry_path)?;
+                fs::set_permissions(&dest_path, metadata.permissions())?;
+            }
+            
+            #[cfg(windows)]
+            {
+                use std::os::windows::fs::MetadataExt;
+                let metadata = fs::metadata(&entry_path)?;
+                let mut perm = fs::metadata(&dest_path)?.permissions();
+                perm.set_readonly(metadata.permissions().readonly());
+                fs::set_permissions(&dest_path, perm)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn cmd_mv(source: &str, destination: &str, copy: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let source_path = PathBuf::from(source);
+    let dest_path = PathBuf::from(destination);
+
+    if !source_path.exists() {
+        return Err(format!("Source path does not exist: {}", source_path.display()).into());
+    }
+
+    let source_metadata = fs::metadata(&source_path)?;
+
+    let final_dest = if dest_path.is_dir() {
+        dest_path.join(source_path.file_name().ok_or("Invalid source path")?)
+    } else {
+        dest_path.clone()
+    };
+
+    if final_dest.exists() {
+        return Err(format!("Destination path already exists: Please remove it first: {}", final_dest.display()).into());
+    }
+
+    if copy {
+        if source_metadata.is_dir() {
+            copy_dir_recursive(&source_path, &final_dest)?;
+            println!(
+                "{} Copied directory {} to {}",
+                "✔".bright_green(),
+                source_path.display().to_string().cyan(),
+                final_dest.display().to_string().cyan()
+            );
+        } else {
+            fs::copy(&source_path, &final_dest)?;
+            
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mut perm = fs::metadata(&final_dest)?.permissions();
+                perm.set_mode(source_metadata.permissions().mode());
+                fs::set_permissions(&final_dest, perm)?;
+            }
+            
+            #[cfg(windows)]
+            {
+                let mut perm = fs::metadata(&final_dest)?.permissions();
+                perm.set_readonly(source_metadata.permissions().readonly());
+                fs::set_permissions(&final_dest, perm)?;
+            }
+
+            println!(
+                "{} Copied file {} to {}",
+                "✔".bright_green(),
+                source_path.display().to_string().cyan(),
+                final_dest.display().to_string().cyan()
+            );
+        }
+    } else {
+        fs::rename(&source_path, &final_dest)?;
+        println!(
+            "{} Moved {} to {}",
+            "✔".bright_green(),
+            source_path.display().to_string().cyan(),
+            final_dest.display().to_string().cyan()
+        );
+    }
+
+    Ok(())
+}
+
 fn cmd_help() -> Result<(), Box<dyn std::error::Error>> {
     println!("{}", "📖 Available Commands:".bright_yellow().bold());
     println!();
@@ -443,12 +613,17 @@ fn cmd_help() -> Result<(), Box<dyn std::error::Error>> {
     println!("  {}       List contents of specified directory", "ls <path>".cyan().bold());
     println!();
     println!("  {}              Print current working directory", "pwd".cyan().bold());
+    println!("  {}   Copy current directory path to clipboard", "cppwd".cyan().bold());
+    println!("  {}  Copy file absolute path to clipboard", "cpf <file>".cyan().bold());
     println!();
     println!("  {}            Change to home directory", "cd".cyan().bold());
     println!("  {}         Change to parent directory", "cd ..".cyan().bold());
     println!("  {}     Change to specified directory", "cd <path>".cyan().bold());
     println!();
     println!("  {}         Open file with default application", "open <file>".cyan().bold());
+    println!();
+    println!("  {}    Move file/folder to destination", "mv <source> <dest>".cyan().bold());
+    println!("  {}    Copy file/folder to destination (preserves original)", "mv <source> <dest> --cp".cyan().bold());
     println!();
     println!("  {}             Exit the program", "exit".cyan().bold());
     println!("  {}            Clear the screen", "clear".cyan().bold());
@@ -468,6 +643,11 @@ fn execute_command(input: &str) -> Result<bool, Box<dyn std::error::Error>> {
 
     match cmd.as_str() {
         "pwd" => cmd_pwd()?,
+        "cppwd" => cmd_cppwd()?,
+        "cpf" => {
+            let path = parts.get(1).copied().ok_or("Usage: cpf <file>")?;
+            cmd_cpf(path)?;
+        }
         "cd" => {
             let path = parts.get(1).copied();
             cmd_cd(path)?;
@@ -493,6 +673,26 @@ fn execute_command(input: &str) -> Result<bool, Box<dyn std::error::Error>> {
         "open" => {
             let path = parts.get(1).copied().ok_or("Usage: open <file>")?;
             cmd_open(path)?;
+        }
+        "mv" => {
+            let mut source: Option<&str> = None;
+            let mut destination: Option<&str> = None;
+            let mut copy = false;
+
+            for &part in &parts[1..] {
+                if part == "--cp" {
+                    copy = true;
+                } else if source.is_none() {
+                    source = Some(part);
+                } else if destination.is_none() {
+                    destination = Some(part);
+                }
+            }
+
+            let source = source.ok_or("Usage: mv <source_path> <destination_path> [--cp]")?;
+            let destination = destination.ok_or("Usage: mv <source_path> <destination_path> [--cp]")?;
+            
+            cmd_mv(source, destination, copy)?;
         }
         "exit" | "quit" | "q" => {
             println!("{}", "👋 Goodbye!".bright_green());
@@ -531,7 +731,7 @@ fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
                     continue;
                 }
                 rl.add_history_entry(input);
-                
+
                 match execute_command(input) {
                     Ok(should_exit) => {
                         if should_exit {
@@ -575,6 +775,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cmd = &args[1].to_lowercase();
     let result = match cmd.as_str() {
         "pwd" => cmd_pwd(),
+        "cppwd" => cmd_cppwd(),
+        "cpf" => {
+            let path = args.get(2).map(|s| s.as_str()).ok_or("Usage: rfe cpf <file>")?;
+            cmd_cpf(path)
+        }
         "cd" => {
             let path = args.get(2).map(|s| s.as_str());
             cmd_cd(path)
@@ -600,6 +805,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "open" => {
             let path = args.get(2).map(|s| s.as_str()).ok_or("Usage: rfe open <file>")?;
             cmd_open(path)
+        }
+        "mv" => {
+            let mut source: Option<&str> = None;
+            let mut destination: Option<&str> = None;
+            let mut copy = false;
+
+            for arg in &args[2..] {
+                if arg == "--cp" {
+                    copy = true;
+                } else if source.is_none() {
+                    source = Some(arg);
+                } else if destination.is_none() {
+                    destination = Some(arg);
+                }
+            }
+
+            let source = source.ok_or("Usage: rfe mv <source_path> <destination_path> [--cp]")?;
+            let destination = destination.ok_or("Usage: rfe mv <source_path> <destination_path> [--cp]")?;
+            
+            cmd_mv(source, destination, copy)
         }
         "exit" => {
             println!("{}", "👋 Goodbye!".bright_green());
