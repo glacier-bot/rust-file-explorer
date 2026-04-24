@@ -1512,7 +1512,9 @@ fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
     output.push_str(&format!("  Use {} to chain commands with sequential execution and output passing\n", "->".yellow().bold()));
     output.push_str(&format!("  Example: {} pwd -> ls -> cd .. -> pwd\n", "$".bright_black()));
     output.push_str(&format!("  Use {} to continue execution even if previous command fails\n", "->!".yellow().bold()));
-    output.push_str(&format!("  Example: {} cd non_exist! -> ls\n\n", "$".bright_black()));
+    output.push_str(&format!("  Example: {} cd non_exist! -> ls\n", "$".bright_black()));
+    output.push_str(&format!("  Use {{}} as placeholder to insert previous command's output\n"));
+    output.push_str(&format!("  Example: {} cppwd -> alias add desktop {{}}\n\n", "$".bright_black()));
     
     Ok((output, String::new()))
 }
@@ -1686,8 +1688,15 @@ fn execute_command(input: &str, alias_manager: &mut AliasManager, tag_manager: &
 
         let continue_on_error = segment.ends_with('!');
         let cmd = if continue_on_error { &segment[..segment.len()-1] } else { segment };
+        
+        // 使用 {} 占位符扩展：将前一个命令的原始输出替换到 {} 位置
+        let cmd = if cmd.contains("{}") {
+            cmd.replace("{}", &previous_raw_data)
+        } else {
+            cmd.to_string()
+        };
 
-        match execute_single_command(cmd, &previous_raw_data, alias_manager, tag_manager) {
+        match execute_single_command(&cmd, &previous_raw_data, alias_manager, tag_manager) {
             Ok((exit, display_output, raw_data)) => {
                 println!("{}", display_output);
                 previous_raw_data = raw_data;
