@@ -9,6 +9,8 @@ mod managers;
 mod commands;
 mod helper;
 
+use crate::utils::split_command_args;
+
 use crate::commands::*;
 use crate::helper::RfeHelper;
 use crate::managers::{alias::AliasManager, tag::TagManager};
@@ -21,7 +23,7 @@ fn print_welcome() {
     );
     println!(
         "{}",
-        "║           Rust File Explorer v0.3.0                          ║".bright_green()
+        "║           Rust File Explorer v0.3.1                          ║".bright_green()
     );
     println!(
         "{}",
@@ -63,7 +65,7 @@ fn get_prompt_string() -> String {
 }
 
 fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut AliasManager, tag_manager: &mut TagManager) -> Result<(bool, String, String), Box<dyn std::error::Error>> {
-    let parts: Vec<&str> = input.split_whitespace().collect();
+    let parts: Vec<String> = split_command_args(input);
 
     if parts.is_empty() {
         return Ok((false, String::new(), String::new()));
@@ -81,8 +83,8 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
             Ok((false, display, raw))
         }
         "cpf" => {
-            let path = if let Some(p) = parts.get(1).copied() {
-                p.to_string()
+            let path = if let Some(p) = parts.get(1) {
+                p.clone()
             } else if !input_data.is_empty() {
                 input_data.to_string()
             } else {
@@ -94,7 +96,7 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
         }
         "cd" => {
             let path = if parts.len() > 1 {
-                Some(alias_manager.resolve_path(parts[1]))
+                Some(alias_manager.resolve_path(&parts[1]))
             } else if !input_data.is_empty() {
                 Some(input_data.to_string())
             } else {
@@ -115,7 +117,7 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
             
             let mut i = 1;
             while i < parts.len() {
-                match parts[i] {
+                match parts[i].as_str() {
                     "-a" | "--all" => all = true,
                     "-l" | "--long" => long = true,
                     "-la" | "-al" => {
@@ -132,7 +134,7 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
                     "-tag" | "--tags" => show_tags = true,
                     "-t" | "--tag" => {
                         if i + 1 < parts.len() {
-                            tag_pattern_strs.push(parts[i+1].to_string());
+                            tag_pattern_strs.push(parts[i+1].clone());
                             i += 1;
                         } else {
                             return Err("标签查询参数需要指定匹配模式，用法：ls -t <标签正则>".into());
@@ -159,8 +161,8 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
             Ok((false, display, raw))
         }
         "open" => {
-            let path = if let Some(p) = parts.get(1).copied() {
-                p.to_string()
+            let path = if let Some(p) = parts.get(1) {
+                p.clone()
             } else if !input_data.is_empty() {
                 input_data.to_string()
             } else {
@@ -175,7 +177,7 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
             let mut destination: Option<String> = None;
             let mut copy = false;
 
-            for &part in &parts[1..] {
+            for part in &parts[1..] {
                 if part == "--cp" {
                     copy = true;
                 } else if source.is_none() {
@@ -192,11 +194,13 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
             Ok((false, display, raw))
         }
         "alias" => {
-            let (display, raw) = alias::cmd_alias(alias_manager, &parts[1..])?;
+            let alias_args: Vec<&str> = parts[1..].iter().map(|s| s.as_str()).collect();
+            let (display, raw) = alias::cmd_alias(alias_manager, &alias_args)?;
             Ok((false, display, raw))
         }
         "tag" | "t" => {
-            let (display, raw) = tag::cmd_tag(tag_manager, &parts[1..])?;
+            let tag_args: Vec<&str> = parts[1..].iter().map(|s| s.as_str()).collect();
+            let (display, raw) = tag::cmd_tag(tag_manager, &tag_args)?;
             Ok((false, display, raw))
         }
         "exit" | "quit" | "q" => {
@@ -211,7 +215,8 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
             Ok((false, display, raw))
         }
         "mkdf" => {
-            let (display, raw) = mkdf::cmd_mkdf(&parts[1..])?;
+            let mkdf_args: Vec<&str> = parts[1..].iter().map(|s| s.as_str()).collect();
+            let (display, raw) = mkdf::cmd_mkdf(&mkdf_args)?;
             Ok((false, display, raw))
         }
         _ => {
