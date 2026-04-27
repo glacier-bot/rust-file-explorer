@@ -690,7 +690,7 @@ fn print_welcome() {
     );
     println!(
         "{}",
-        "║           Rust File Explorer v0.2.0                          ║".bright_green()
+        "║           Rust File Explorer v0.3.0                          ║".bright_green()
     );
     println!(
         "{}",
@@ -709,10 +709,10 @@ fn print_welcome() {
     println!("  {}  - Change directory", "cd <path>".cyan());
     println!("  {}  - Open file with default application / Open directory in file explorer", "open <path>".cyan());
     println!("  {}  - Move/copy file or folder (use --cp to copy)", "mv <source> <dest> [--cp]".cyan());
-    println!(" {} - Create file or directory (-f for file, -d for directory)", "mkdf".cyan());
-    println!(" {} - Manage path aliases (add/remove/list)", "alias".cyan());
-    println!(" {} - Manage file tags (add/remove/find/list/backup)", "tag".cyan());
-    println!(" {} - Exit the program", "exit".cyan());
+    println!("  {}  - Create file or directory (-f for file, -d for directory)", "mkdf".cyan());
+    println!("  {}  - Manage path aliases (add/remove/list)", "alias".cyan());
+    println!("  {}  - Manage file tags (add/remove/find/list/backup)", "tag".cyan());
+    println!("  {}  - Exit the program", "exit".cyan());
     println!("  {} - Clear the screen", "clear".cyan());
     println!("  {}  - Show this help", "help".cyan());
     println!();
@@ -811,7 +811,7 @@ fn cmd_cd(path: Option<&str>) -> Result<(String, String), Box<dyn std::error::Er
 use regex::Regex;
 
 #[allow(clippy::too_many_arguments)]
-fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: bool, path: Option<&str>, tag_manager: &TagManager, tag_patterns: &[Regex]) -> Result<(String, String), Box<dyn std::error::Error>> {
+fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: bool, recursive: bool, path: Option<&str>, tag_manager: &TagManager, tag_patterns: &[Regex]) -> Result<(String, String), Box<dyn std::error::Error>> {
     let mut output = String::new();
     let mut files: Vec<FileInfo> = Vec::new();
     let mut dirs: Vec<FileInfo> = Vec::new();
@@ -837,7 +837,7 @@ fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: bool
             pattern.bright_cyan()
         ));
 
-        fn walk_dir(dir: &Path, pattern: &Regex, all: bool, show_tags: bool, tag_manager: &TagManager, files: &mut Vec<FileInfo>, dirs: &mut Vec<FileInfo>) -> Result<(), Box<dyn std::error::Error>> {
+        fn walk_dir(dir: &Path, pattern: &Regex, all: bool, show_tags: bool, recursive: bool, tag_manager: &TagManager, files: &mut Vec<FileInfo>, dirs: &mut Vec<FileInfo>) -> Result<(), Box<dyn std::error::Error>> {
             for entry in fs::read_dir(dir)?.filter_map(|e| e.ok()) {
                 let path = entry.path();
                 let path_str = path.to_string_lossy();
@@ -884,14 +884,14 @@ fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: bool
                     }
                 }
 
-                if path.is_dir() && walk_dir(&path, pattern, all, show_tags, tag_manager, files, dirs).is_err() {
+                if path.is_dir() && recursive && walk_dir(&path, pattern, all, show_tags, recursive, tag_manager, files, dirs).is_err() {
                     continue;
                 }
             }
             Ok(())
         }
 
-        walk_dir(&search_dir, &re_pattern, all, show_tags, tag_manager, &mut files, &mut dirs)?;
+        walk_dir(&search_dir, &re_pattern, all, show_tags, recursive, tag_manager, &mut files, &mut dirs)?
     } else {
         let target = match path {
             Some(p) => PathBuf::from(p),
@@ -1549,7 +1549,9 @@ fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
     output.push_str(&format!("  {}       List files with their tags\n", "ls -tag".cyan().bold()));
     output.push_str(&format!("  {}      List files matching specified tag regex, supports multi-tag combinations\n", "ls -t/--tag <tag-regex>".cyan().bold()));
     output.push_str(&format!("  {}       Search for files/directories using regex pattern\n", "ls --re <pattern>".cyan().bold()));
-    output.push_str(&format!("  {}  Case-insensitive regex search\n\n", "ls --re --re-insensitive <pattern>".cyan().bold()));
+    output.push_str(&format!("  {}    Search recursively with regex\n", "ls --re-deep <pattern>".cyan().bold()));
+    output.push_str(&format!("  {}  Case-insensitive regex search\n", "ls --re --xcaps <pattern>".cyan().bold()));
+    output.push_str(&format!("  {}  Case-insensitive recursive regex search\n\n", "ls --re-deep --xcaps <pattern>".cyan().bold()));
 
     output.push_str(&format!("{}\n", "📝 Common Regex Syntax:".bright_yellow().bold()));
     output.push_str(&format!("  {}  Match any single character                e.g. ls --re fi.e  =>  file, fine\n", ".".bright_cyan()));
@@ -1580,6 +1582,7 @@ fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
     output.push_str(&format!("  {}      Create a directory\n", "mkdf -d <path>".cyan().bold()));
     output.push_str(&format!("  {}   Create a directory with parents\n", "mkdf -d -p <path>".cyan().bold()));
     output.push_str(&format!("  {}     Show mkdf command help\n\n", "mkdf -h/--help".cyan().bold()));
+    output.push_str(&format!("  {}   Search recursively with regex\n", "ls --re-deep <pattern>".cyan().bold()));
     
     output.push_str(&format!("  {}             Exit the program\n", "exit".cyan().bold()));
     output.push_str(&format!("  {}            Clear the screen\n", "clear".cyan().bold()));
@@ -1668,6 +1671,7 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
             let mut re = false;
             let mut re_insensitive = false;
             let mut show_tags = false;
+            let mut recursive = false;
             let mut path: Option<String> = None;
             let mut tag_pattern_strs: Vec<String> = Vec::new();
             
@@ -1681,7 +1685,12 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
                         long = true;
                     }
                     "--re" => re = true,
+                    "--re-deep" => {
+                        re = true;
+                        recursive = true;
+                    }
                     "--re-insensitive" => re_insensitive = true,
+                    "--xcaps" => re_insensitive = true,
                     "-tag" | "--tags" => show_tags = true,
                     "-t" | "--tag" => {
                         if i + 1 < parts.len() {
@@ -1710,7 +1719,7 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
                 }
             }
             
-            let (display, raw) = cmd_ls(all, long, re, re_insensitive, show_tags, path.as_deref(), tag_manager, &tag_patterns)?;
+            let (display, raw) = cmd_ls(all, long, re, re_insensitive, show_tags, recursive, path.as_deref(), tag_manager, &tag_patterns)?;
             Ok((false, display, raw))
         }
         "open" => {
@@ -1919,6 +1928,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut re = false;
             let mut re_insensitive = false;
             let mut show_tags = false;
+            let mut recursive = false;
             let mut path: Option<String> = None;
             let mut tag_pattern_strs: Vec<String> = Vec::new();
             
@@ -1932,7 +1942,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         long = true;
                     }
                     "--re" => re = true,
+                    "--re-deep" => {
+                        re = true;
+                        recursive = true;
+                    }
                     "--re-insensitive" => re_insensitive = true,
+                    "--xcaps" => re_insensitive = true,
                     "-tag" | "--tags" => show_tags = true,
                     "-t" | "--tag" => {
                         if i + 1 < args.len() {
@@ -1956,7 +1971,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             
-            cmd_ls(all, long, re, re_insensitive, show_tags, path.as_deref(), &tag_manager, &tag_patterns)
+            cmd_ls(all, long, re, re_insensitive, show_tags, recursive, path.as_deref(), &tag_manager, &tag_patterns)
         }
         "open" => {
             let path = args.get(2).map(|s| s.as_str()).ok_or("Usage: rfe open <file>")?;

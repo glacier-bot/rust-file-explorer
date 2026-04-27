@@ -360,6 +360,10 @@ rfe <command> [arguments]
 | `mkdf -d <path>` | 创建文件夹 | `mkdf -d test_folder` |
 | `mkdf -d -p <path>` | 创建文件夹和父目录 | `mkdf -d -p parent/child/grandchild` |
 | `mkdf -h` / `--help` | 查看mkdf命令帮助 | `mkdf --help` |
+| `ls --re <pattern>` | 使用正则表达式搜索文件/目录 | `rfe ls --re \.rs$` |
+| `ls --re-deep <pattern>` | 递归使用正则表达式搜索 | `rfe ls --re-deep \.rs$` |
+| `ls --re --xcaps <pattern>` | 大小写不敏感的正则搜索 | `rfe ls --re --xcaps \.RS$` |
+| `ls --re-deep --xcaps <pattern>` | 递归大小写不敏感的正则搜索 | `rfe ls --re-deep --xcaps \.RS$` |
 | `ESC` | 在 REPL 模式下按ESC键，清空当前输入内容 | 输入命令过程中按ESC快速清空 |
 
 ### 📝 常用正则表达式语法参考
