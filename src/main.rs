@@ -12,8 +12,52 @@ use std::fs::{self, File, Metadata};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::SystemTime;
+use std::sync::Mutex;
+use std::time::{Instant, SystemTime};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+
+// 目录内容缓存，用于加速补全
+struct DirCache {
+    entries: Vec<(String, bool)>, // (文件名, 是否目录)
+    timestamp: Instant,
+}
+
+static DIR_CACHE: Mutex<Option<HashMap<String, DirCache>>> = Mutex::new(None);
+const CACHE_TTL_MS: u64 = 5000; // 缓存有效期5秒
+
+fn get_cached_dir_entries(path: &Path) -> Option<Vec<(String, bool)>> {
+    let path_str = path.to_string_lossy().to_string();
+    
+    let mut cache_guard = DIR_CACHE.lock().ok()?;
+    
+    if cache_guard.is_none() {
+        *cache_guard = Some(HashMap::new());
+    }
+    
+    let cache = cache_guard.as_ref().unwrap();
+    
+    // 检查缓存是否有效
+    if let Some(cached) = cache.get(&path_str) {
+        if cached.timestamp.elapsed().as_millis() < CACHE_TTL_MS as u128 {
+            return Some(cached.entries.clone());
+        }
+    }
+    
+    None
+}
+
+fn cache_dir_entries(path: &Path, entries: Vec<(String, bool)>) {
+    let path_str = path.to_string_lossy().to_string();
+    
+    if let Ok(mut cache_guard) = DIR_CACHE.lock() {
+        if let Some(ref mut cache) = cache_guard.as_mut() {
+            cache.insert(path_str, DirCache {
+                entries,
+                timestamp: Instant::now(),
+            });
+        }
+    }
+}
 
 struct FileInfo {
     name: String,
@@ -367,27 +411,171 @@ impl Completer for RfeHelper {
     ) -> Result<(usize, Vec<Pair>), ReadlineError> {
         let current_word = &line[..pos];
         
-        // 别名补全
+        // 路径别名补全 - 支持 @alias/path 的层级补全
         if let Some(at_pos) = current_word.rfind('@') {
-            let alias_prefix = &current_word[at_pos+1..];
-            let mut candidates = Vec::new();
+            let after_at = &current_word[at_pos + 1..];
             
-            for (alias, path) in self.alias_manager.list() {
-                if alias.starts_with(alias_prefix) {
-                    let replacement = if let Some(rest) = current_word[at_pos..].split_once('/') {
-                        format!("@{}/{}", alias, rest.1)
+            // 检查是否包含路径分隔符（需要子路径补全）
+            if let Some(sep_pos) = after_at.find('/') {
+                let alias_name = &after_at[..sep_pos];
+                let sub_path = &after_at[sep_pos + 1..];
+                
+                // 获取别名对应的真实路径
+                if let Some(alias_path) = self.alias_manager.get(alias_name) {
+                    let base_path = PathBuf::from(alias_path);
+                    
+                    // 解析子路径，确定要浏览的目录
+                    let (dir_to_list, file_prefix) = if sub_path.ends_with('/') {
+                        (base_path.join(sub_path), "")
+                    } else if let Some(last_sep) = sub_path.rfind('/') {
+                        let dir_part = &sub_path[..last_sep];
+                        let file_part = &sub_path[last_sep + 1..];
+                        (base_path.join(dir_part), file_part)
                     } else {
-                        format!("@{}", alias)
+                        (base_path.clone(), sub_path)
                     };
-                    candidates.push(Pair {
-                        display: format!("@{} -> {}", alias, path),
-                        replacement,
-                    });
+                    
+                    // 读取目录内容并提供补全（带缓存和性能限制）
+                    if dir_to_list.is_dir() {
+                        let start_time = Instant::now();
+                        let mut candidates = Vec::new();
+                        const MAX_COMPLETION_TIME_MS: u128 = 100; // 单次补全最大耗时100ms
+                        const MAX_ENTRIES: usize = 100; // 最大补全条目数
+                        
+                        // 尝试从缓存获取
+                        let entries: Vec<(String, bool)> = if let Some(cached) = get_cached_dir_entries(&dir_to_list) {
+                            cached
+                        } else {
+                            // 读取目录并缓存
+                            let mut new_entries = Vec::new();
+                            if let Ok(dir_entries) = fs::read_dir(&dir_to_list) {
+                                for entry in dir_entries.filter_map(|e| e.ok()) {
+                                    if let Some(name) = entry.file_name().to_str() {
+                                        let is_dir = entry.metadata().ok()
+                                            .map(|m| m.is_dir()).unwrap_or(false);
+                                        new_entries.push((name.to_string(), is_dir));
+                                    }
+                                }
+                            }
+                            cache_dir_entries(&dir_to_list, new_entries.clone());
+                            new_entries
+                        };
+                        
+                        // 生成补全候选
+                        for (name, is_dir) in entries {
+                            // 性能检查：超时则返回已有结果
+                            if start_time.elapsed().as_millis() > MAX_COMPLETION_TIME_MS {
+                                break;
+                            }
+                            
+                            // 过滤匹配前缀的条目
+                            if !file_prefix.is_empty() && !name.starts_with(file_prefix) {
+                                continue;
+                            }
+                            
+                            // 限制最大条目数
+                            if candidates.len() >= MAX_ENTRIES {
+                                break;
+                            }
+                            
+                            // 构建补全路径
+                            let replacement = if let Some(last_sep) = sub_path.rfind('/') {
+                                format!("@{}/{}/{}", alias_name, &sub_path[..last_sep], name)
+                            } else {
+                                format!("@{}/{}", alias_name, name)
+                            };
+                            
+                            // 如果是目录，添加尾部斜杠
+                            let replacement_with_sep = if is_dir {
+                                format!("{}/", replacement)
+                            } else {
+                                replacement.clone()
+                            };
+                            
+                            candidates.push(Pair {
+                                display: name.clone(),
+                                replacement: replacement_with_sep,
+                            });
+                        }
+                        
+                        // 按目录在前、文件在后排序
+                        candidates.sort_by(|a, b| {
+                            let a_is_dir = a.replacement.ends_with('/');
+                            let b_is_dir = b.replacement.ends_with('/');
+                            match (a_is_dir, b_is_dir) {
+                                (true, false) => std::cmp::Ordering::Less,
+                                (false, true) => std::cmp::Ordering::Greater,
+                                _ => a.display.cmp(&b.display),
+                            }
+                        });
+                        
+                        if !candidates.is_empty() {
+                            return Ok((at_pos, candidates));
+                        }
+                    }
                 }
-            }
-            
-            if !candidates.is_empty() {
-                return Ok((at_pos, candidates));
+            } else {
+                // 纯别名补全（无子路径）
+                let alias_prefix = after_at;
+                let mut candidates = Vec::new();
+                
+                for (alias, path) in self.alias_manager.list() {
+                    if alias.starts_with(alias_prefix) {
+                        candidates.push(Pair {
+                            display: format!("📍 @{} -> {}", alias, path),
+                            replacement: format!("@{}", alias),
+                        });
+                    }
+                }
+                
+                // 如果有匹配的别名，同时提供别名的子路径补全
+                if candidates.len() == 1 || alias_prefix.is_empty() {
+                    // 获取第一个匹配别名的目录内容作为额外补全
+                    for (alias, path) in self.alias_manager.list() {
+                        if alias.starts_with(alias_prefix) {
+                            let alias_path = PathBuf::from(path);
+                            if alias_path.is_dir() {
+                                // 使用缓存获取目录内容
+                                let entries = if let Some(cached) = get_cached_dir_entries(&alias_path) {
+                                    cached
+                                } else {
+                                    let mut new_entries = Vec::new();
+                                    if let Ok(dir_entries) = fs::read_dir(&alias_path) {
+                                        for entry in dir_entries.filter_map(|e| e.ok()) {
+                                            if let Some(name) = entry.file_name().to_str() {
+                                                let is_dir = entry.metadata().ok()
+                                                    .map(|m| m.is_dir()).unwrap_or(false);
+                                                new_entries.push((name.to_string(), is_dir));
+                                            }
+                                        }
+                                    }
+                                    cache_dir_entries(&alias_path, new_entries.clone());
+                                    new_entries
+                                };
+                                
+                                let mut sub_candidates = Vec::new();
+                                for (name, is_dir) in entries.into_iter().take(20) {
+                                    let replacement = if is_dir {
+                                        format!("@{}/{}/", alias, name)
+                                    } else {
+                                        format!("@{}/{}", alias, name)
+                                    };
+                                    
+                                    sub_candidates.push(Pair {
+                                        display: name,
+                                        replacement,
+                                    });
+                                }
+                                candidates.extend(sub_candidates);
+                            }
+                            break; // 只处理第一个匹配的别名
+                        }
+                    }
+                }
+                
+                if !candidates.is_empty() {
+                    return Ok((at_pos, candidates));
+                }
             }
         }
         
