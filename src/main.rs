@@ -5,7 +5,7 @@ use rustyline::error::ReadlineError;
 use rustyline::highlight::Highlighter;
 use rustyline::hint::Hinter;
 use rustyline::validate::Validator;
-use rustyline::{Context, Helper};
+use rustyline::{Context, Helper, Cmd, KeyCode, KeyEvent, Movement};
 use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File, Metadata};
@@ -690,7 +690,7 @@ fn print_welcome() {
     );
     println!(
         "{}",
-        "║           Rust File Explorer v0.1.0                          ║".bright_green()
+        "║           Rust File Explorer v0.2.0                          ║".bright_green()
     );
     println!(
         "{}",
@@ -709,11 +709,15 @@ fn print_welcome() {
     println!("  {}  - Change directory", "cd <path>".cyan());
     println!("  {}  - Open file with default application / Open directory in file explorer", "open <path>".cyan());
     println!("  {}  - Move/copy file or folder (use --cp to copy)", "mv <source> <dest> [--cp]".cyan());
+    println!(" {} - Create file or directory (-f for file, -d for directory)", "mkdf".cyan());
     println!(" {} - Manage path aliases (add/remove/list)", "alias".cyan());
     println!(" {} - Manage file tags (add/remove/find/list/backup)", "tag".cyan());
     println!(" {} - Exit the program", "exit".cyan());
     println!("  {} - Clear the screen", "clear".cyan());
     println!("  {}  - Show this help", "help".cyan());
+    println!();
+    println!("{}", "Keyboard shortcuts:".bright_yellow());
+    println!("  {} - Clear current input line in REPL mode", "ESC".cyan());
     println!();
 }
 
@@ -1166,6 +1170,96 @@ fn cmd_clear() -> Result<(String, String), Box<dyn std::error::Error>> {
     Ok((String::new(), String::new()))
 }
 
+fn cmd_mkdf(args: &[&str]) -> Result<(String, String), Box<dyn std::error::Error>> {
+    let mut create_file = false;
+    let mut create_dir = false;
+    let mut parents = false;
+    let mut path: Option<String> = None;
+    let mut show_help = false;
+    
+    let mut i = 0;
+    while i < args.len() {
+        match args[i] {
+            "-f" | "--file" => {
+                create_file = true;
+                create_dir = false;
+            }
+            "-d" | "--directory" => {
+                create_dir = true;
+                create_file = false;
+            }
+            "-p" | "--parents" => {
+                parents = true;
+            }
+            "-h" | "--help" => {
+                show_help = true;
+            }
+            p => {
+                if path.is_none() {
+                    path = Some(p.to_string());
+                } else {
+                    return Err("Too many arguments. Only one path can be specified.".into());
+                }
+            }
+        }
+        i += 1;
+    }
+    
+    if show_help {
+        let mut output = format!("{}\n\n", "📁 mkdf Command Help:".bright_yellow().bold());
+        output.push_str(&format!("  {} Create a file\n", "mkdf -f/--file <path>".cyan().bold()));
+        output.push_str(&format!("  {} Create a directory\n", "mkdf -d/--directory <path>".cyan().bold()));
+        output.push_str(&format!("  {} Create parent directories if they don't exist\n", "mkdf -p/--parents".cyan().bold()));
+        output.push_str(&format!("  {} Show this help\n\n", "mkdf -h/--help".cyan().bold()));
+        output.push_str(&format!("{}\n", "Examples:".bright_green().bold()));
+        output.push_str(&format!("  {} Create a file named 'test.txt'\n", "mkdf -f test.txt".cyan()));
+        output.push_str(&format!("  {} Create a directory named 'new_folder'\n", "mkdf -d new_folder".cyan()));
+        output.push_str(&format!("  {} Create a file with parent directories\n", "mkdf -f -p path/to/file.txt".cyan()));
+        output.push_str(&format!("  {} Create nested directories\n", "mkdf -d -p parent/child/grandchild".cyan()));
+        return Ok((output, String::new()));
+    }
+    
+    let path = path.ok_or("Usage: mkdf [-f|--file|-d|--directory] [-p|--parents] <path>")?;
+    
+    if !create_file && !create_dir {
+        return Err("Please specify whether to create a file (-f/--file) or directory (-d/--directory)".into());
+    }
+    
+    let target_path = PathBuf::from(&path);
+    
+    if target_path.exists() {
+        return Err(format!("Path already exists: {}", target_path.display()).into());
+    }
+    
+    if create_file {
+        // 创建文件时，自动创建父目录
+        if let Some(parent) = target_path.parent() {
+            if !parent.exists() {
+                fs::create_dir_all(parent)?;
+            }
+        }
+        
+        File::create(&target_path)?;
+        Ok((format!("{} Created file: {}", "✔".bright_green(), target_path.display().to_string().cyan()), target_path.display().to_string()))
+    } else {
+        // 创建目录时，根据是否指定了-p参数决定是否创建父目录
+        if parents {
+            fs::create_dir_all(&target_path)?;
+            Ok((format!("{} Created directory (with parents): {}", "✔".bright_green(), target_path.display().to_string().cyan()), target_path.display().to_string()))
+        } else {
+            // 不使用-p参数时，只创建最后一级目录，父目录必须存在
+            if let Some(parent) = target_path.parent() {
+                if !parent.exists() {
+                    return Err(format!("Parent directory does not exist. Use -p/--parents to create it: {}", parent.display()).into());
+                }
+            }
+            
+            fs::create_dir(&target_path)?;
+            Ok((format!("{} Created directory: {}", "✔".bright_green(), target_path.display().to_string().cyan()), target_path.display().to_string()))
+        }
+    }
+}
+
 fn copy_dir_recursive(source: &Path, destination: &Path) -> Result<(), Box<dyn std::error::Error>> {
     fs::create_dir_all(destination)?;
 
@@ -1482,10 +1576,18 @@ fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
     output.push_str(&format!("  {}    Move file/folder to destination\n", "mv <source> <dest>".cyan().bold()));
     output.push_str(&format!("  {}    Copy file/folder to destination (preserves original)\n\n", "mv <source> <dest> --cp".cyan().bold()));
     
+    output.push_str(&format!("  {}    Create a file (auto-creates parent directories)\n", "mkdf -f <path>".cyan().bold()));
+    output.push_str(&format!("  {}      Create a directory\n", "mkdf -d <path>".cyan().bold()));
+    output.push_str(&format!("  {}   Create a directory with parents\n", "mkdf -d -p <path>".cyan().bold()));
+    output.push_str(&format!("  {}     Show mkdf command help\n\n", "mkdf -h/--help".cyan().bold()));
+    
     output.push_str(&format!("  {}             Exit the program\n", "exit".cyan().bold()));
     output.push_str(&format!("  {}            Clear the screen\n", "clear".cyan().bold()));
     output.push_str(&format!("  {}             Show this help\n", "help".cyan().bold()));
     output.push_str(&format!("  {}            Manage path aliases\n\n", "alias".cyan().bold()));
+
+    output.push_str(&format!("{}\n", "⌨️ Keyboard Shortcuts:".bright_yellow().bold()));
+    output.push_str(&format!("  {}        Clear current input line in REPL mode\n\n", "ESC".cyan().bold()));
 
     output.push_str(&format!("{}\n\n", "✨ Path Aliases:".bright_green().bold()));
     output.push_str(&format!("  Use {} prefix to use path aliases for faster navigation\n", "@".yellow().bold()));
@@ -1663,6 +1765,10 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
             let (display, raw) = cmd_help()?;
             Ok((false, display, raw))
         }
+        "mkdf" => {
+            let (display, raw) = cmd_mkdf(&parts[1..])?;
+            Ok((false, display, raw))
+        }
         _ => {
             let display = format!(
                 "{} Command not found: {}. Type 'help' for available commands.",
@@ -1732,6 +1838,13 @@ fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let mut rl = rustyline::Editor::new()?;
+    
+    // 绑定ESC键清空当前输入行
+    rl.bind_sequence(
+        KeyEvent(KeyCode::Esc, rustyline::Modifiers::NONE),
+        Cmd::Kill(Movement::WholeLine),
+    );
+    
     rl.set_helper(Some(helper));
 
     loop {
@@ -1883,6 +1996,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         "clear" => cmd_clear(),
         "help" => cmd_help(),
+        "mkdf" => {
+            let mkdf_args: Vec<&str> = args[2..].iter().map(|s| s.as_str()).collect();
+            cmd_mkdf(&mkdf_args)
+        }
         _ => {
             Ok((format!(
                 "{} Command not found: {}. Type 'rfe help' for available commands.",
