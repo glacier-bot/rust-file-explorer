@@ -151,10 +151,6 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
                 i += 1;
             }
             
-            if path.is_none() && !input_data.is_empty() {
-                path = Some(input_data.to_string());
-            }
-            
             let mut tag_patterns = Vec::new();
             for pattern_str in tag_pattern_strs {
                 match regex::Regex::new(&pattern_str) {
