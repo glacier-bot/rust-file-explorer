@@ -23,7 +23,7 @@ fn print_welcome() {
     );
     println!(
         "{}",
-        "║           Rust File Explorer v0.3.1                          ║".bright_green()
+        "║           Rust File Explorer v0.3.2                          ║".bright_green()
     );
     println!(
         "{}",
@@ -134,8 +134,14 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
                     "-tag" | "--tags" => show_tags = true,
                     "-t" | "--tag" => {
                         if i + 1 < parts.len() {
-                            tag_pattern_strs.push(parts[i+1].clone());
-                            i += 1;
+                            if parts[i+1] == "--deep" && i + 2 < parts.len() {
+                                recursive = true;
+                                tag_pattern_strs.push(parts[i+2].clone());
+                                i += 2;
+                            } else {
+                                tag_pattern_strs.push(parts[i+1].clone());
+                                i += 1;
+                            }
                         } else {
                             return Err("标签查询参数需要指定匹配模式，用法：ls -t <标签正则>".into());
                         }
@@ -390,8 +396,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "-tag" | "--tags" => show_tags = true,
                     "-t" | "--tag" => {
                         if i + 1 < args.len() {
-                            tag_pattern_strs.push(args[i+1].clone());
-                            i += 1;
+                            if args[i+1] == "--deep" && i + 2 < args.len() {
+                                recursive = true;
+                                tag_pattern_strs.push(args[i+2].clone());
+                                i += 2;
+                            } else {
+                                tag_pattern_strs.push(args[i+1].clone());
+                                i += 1;
+                            }
                         } else {
                             return Err("标签查询参数需要指定匹配模式，用法：ls -t <标签正则>".into());
                         }

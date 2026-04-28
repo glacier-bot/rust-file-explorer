@@ -87,6 +87,19 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
                     continue;
                 }
 
+                // 检查是否是 .gdb 结尾的目录
+                let is_gdb_dir = path.is_dir() && {
+                    if let Some(dir_name) = path.file_name() {
+                        if let Some(dir_str) = dir_name.to_str() {
+                            dir_str.ends_with(".gdb")
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                };
+
                 if pattern.is_match(&path_str) {
                     match entry.metadata() {
                         Ok(meta) => {
@@ -125,8 +138,14 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
                     }
                 }
 
-                if path.is_dir() && recursive && walk_dir(&path, pattern, all, show_tags, recursive, tag_manager, files, dirs).is_err() {
-                    continue;
+                // 递归搜索时，如果是 .gdb 结尾的目录，显示但不遍历其内容
+                if path.is_dir() && recursive {
+                    if is_gdb_dir {
+                        // .gdb 目录：显示但不遍历
+                        continue;
+                    } else if walk_dir(&path, pattern, all, show_tags, recursive, tag_manager, files, dirs).is_err() {
+                        continue;
+                    }
                 }
             }
             Ok(())
@@ -149,58 +168,145 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
             target.display().to_string().bright_cyan()
         ));
 
-        let entries = fs::read_dir(target)?;
+        if !tag_patterns.is_empty() && recursive {
+            fn walk_dir_for_tags(dir: &Path, all: bool, show_tags: bool, tag_manager: &TagManager, files: &mut Vec<FileInfo>, dirs: &mut Vec<FileInfo>) -> Result<(), Box<dyn std::error::Error>> {
+                for entry in fs::read_dir(dir)?.filter_map(|e| e.ok()) {
+                    let path = entry.path();
 
-        for entry in entries.filter_map(|e| e.ok()) {
-            let path = entry.path();
+                    if !all && is_hidden(&path) {
+                        continue;
+                    }
 
-            if !all && is_hidden(&path) {
-                continue;
-            }
-
-            let name = entry.file_name().to_string_lossy().to_string();
-
-            match entry.metadata() {
-                Ok(meta) => {
-                    let (icon, color) = get_file_icon_and_color(&path, &meta);
-                    let created = meta.created().ok();
-                    let modified = meta.modified().unwrap_or_else(|_| SystemTime::now());
-
-                    let tags = if show_tags {
-                        tag_manager.get_tags(path.to_str().unwrap_or(""))
-                    } else {
-                        Vec::new()
-                    };
-                    
-                    let file_info = FileInfo {
-                        name,
-                        icon,
-                        color,
-                        size: meta.len(),
-                        created,
-                        modified,
-                        is_dir: meta.is_dir(),
-                        tags,
+                    // 检查是否是 .gdb 结尾的目录
+                    let is_gdb_dir = path.is_dir() && {
+                        if let Some(dir_name) = path.file_name() {
+                            if let Some(dir_str) = dir_name.to_str() {
+                                dir_str.ends_with(".gdb")
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
                     };
 
-                    if meta.is_dir() {
-                        dirs.push(file_info);
-                    } else {
-                        files.push(file_info);
+                    let name = path.strip_prefix(env::current_dir()?)
+                        .unwrap_or(&path)
+                        .to_string_lossy()
+                        .to_string();
+
+                    match entry.metadata() {
+                        Ok(meta) => {
+                            let (icon, color) = get_file_icon_and_color(&path, &meta);
+                            let created = meta.created().ok();
+                            let modified = meta.modified().unwrap_or_else(|_| SystemTime::now());
+
+                            let tags = if show_tags {
+                                tag_manager.get_tags(path.to_str().unwrap_or(""))
+                            } else {
+                                Vec::new()
+                            };
+                            
+                            let file_info = FileInfo {
+                                name,
+                                icon,
+                                color,
+                                size: meta.len(),
+                                created,
+                                modified,
+                                is_dir: meta.is_dir(),
+                                tags,
+                            };
+
+                            if meta.is_dir() {
+                                dirs.push(file_info);
+                            } else {
+                                files.push(file_info);
+                            }
+                        }
+                        Err(_) => {
+                            let file_info = FileInfo {
+                                name,
+                                icon: "❓",
+                                color: Color::Red,
+                                size: 0,
+                                created: None,
+                                modified: SystemTime::now(),
+                                is_dir: false,
+                                tags: Vec::new(),
+                            };
+                            files.push(file_info);
+                        }
+                    }
+
+                    // 如果是 .gdb 结尾的目录，显示但不遍历其内容
+                    if path.is_dir() {
+                        if is_gdb_dir {
+                            // .gdb 目录：显示但不遍历
+                            continue;
+                        } else if walk_dir_for_tags(&path, all, show_tags, tag_manager, files, dirs).is_err() {
+                            continue;
+                        }
                     }
                 }
-                Err(_) => {
-                    let file_info = FileInfo {
-                        name,
-                        icon: "❓",
-                        color: Color::Red,
-                        size: 0,
-                        created: None,
-                        modified: SystemTime::now(),
-                        is_dir: false,
-                        tags: Vec::new(),
-                    };
-                    files.push(file_info);
+                Ok(())
+            }
+
+            walk_dir_for_tags(&target, all, show_tags, tag_manager, &mut files, &mut dirs)?
+        } else {
+            let entries = fs::read_dir(target)?;
+
+            for entry in entries.filter_map(|e| e.ok()) {
+                let path = entry.path();
+
+                if !all && is_hidden(&path) {
+                    continue;
+                }
+
+                let name = entry.file_name().to_string_lossy().to_string();
+
+                match entry.metadata() {
+                    Ok(meta) => {
+                        let (icon, color) = get_file_icon_and_color(&path, &meta);
+                        let created = meta.created().ok();
+                        let modified = meta.modified().unwrap_or_else(|_| SystemTime::now());
+
+                        let tags = if show_tags {
+                            tag_manager.get_tags(path.to_str().unwrap_or(""))
+                        } else {
+                            Vec::new()
+                        };
+                        
+                        let file_info = FileInfo {
+                            name,
+                            icon,
+                            color,
+                            size: meta.len(),
+                            created,
+                            modified,
+                            is_dir: meta.is_dir(),
+                            tags,
+                        };
+
+                        if meta.is_dir() {
+                            dirs.push(file_info);
+                        } else {
+                            files.push(file_info);
+                        }
+                    }
+                    Err(_) => {
+                        let file_info = FileInfo {
+                            name,
+                            icon: "❓",
+                            color: Color::Red,
+                            size: 0,
+                            created: None,
+                            modified: SystemTime::now(),
+                            is_dir: false,
+                            tags: Vec::new(),
+                        };
+                        files.push(file_info);
+                    }
                 }
             }
         }
@@ -215,11 +321,15 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
     
     if !tag_patterns.is_empty() {
         all_items.retain(|item| {
-            let full_path = match &path {
-                Some(p) => Path::new(p).join(&item.name),
-                None => env::current_dir().unwrap_or_default().join(&item.name),
+            let full_path = if !tag_patterns.is_empty() && recursive {
+                item.name.clone()
+            } else {
+                match &path {
+                    Some(p) => Path::new(p).join(&item.name).to_string_lossy().to_string(),
+                    None => env::current_dir().unwrap_or_default().join(&item.name).to_string_lossy().to_string(),
+                }
             };
-            tag_manager.file_matches_tags(full_path.to_str().unwrap_or_default(), tag_patterns)
+            tag_manager.file_matches_tags(&full_path, tag_patterns)
         });
     }
 

@@ -1,7 +1,15 @@
 [package]
 name = "rfe"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
+
+[lib]
+name = "rfe"
+path = "src/main.rs"
+
+[[bin]]
+name = "rfe"
+path = "src/main.rs"
 
 [dependencies]
 colored = "2.1"
