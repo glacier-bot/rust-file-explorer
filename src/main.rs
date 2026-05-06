@@ -23,7 +23,7 @@ fn print_welcome() {
     );
     println!(
         "{}",
-        "║           Rust File Explorer v0.3.2                          ║".bright_green()
+        "║           Rust File Explorer v0.4.0                          ║".bright_green()
     );
     println!(
         "{}",
@@ -39,7 +39,7 @@ fn print_welcome() {
     println!("  {}  - Print working directory", "pwd".cyan());
     println!("  {}  - Copy current directory path to clipboard", "cppwd".cyan());
     println!("  {}  - Copy file absolute path to clipboard", "cpf <file>".cyan());
-    println!("  {}  - Change directory", "cd <path>".cyan());
+    println!("  {}  - Change directory (use cd -b/-back to go back)\n", "cd <path>".cyan());
     println!("  {}  - Open file with default application / Open directory in file explorer", "open <path>".cyan());
     println!("  {}  - Move/copy file or folder (use --cp to copy)", "mv <source> <dest> [--cp]".cyan());
     println!("  {}  - Create file or directory (-f for file, -d for directory)", "mkdf".cyan());
@@ -64,11 +64,11 @@ fn get_prompt_string() -> String {
     format!("rfe {} >", dir_str)
 }
 
-fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut AliasManager, tag_manager: &mut TagManager) -> Result<(bool, String, String), Box<dyn std::error::Error>> {
+fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut AliasManager, tag_manager: &mut TagManager, previous_dir: Option<&str>) -> Result<(bool, String, String, Option<String>), Box<dyn std::error::Error>> {
     let parts: Vec<String> = split_command_args(input);
 
     if parts.is_empty() {
-        return Ok((false, String::new(), String::new()));
+        return Ok((false, String::new(), String::new(), None));
     }
 
     let cmd = parts[0].to_lowercase();
@@ -76,11 +76,11 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
     match cmd.as_str() {
         "pwd" => {
             let (display, raw) = pwd::cmd_pwd()?;
-            Ok((false, display, raw))
+            Ok((false, display, raw, None))
         }
         "cppwd" => {
             let (display, raw) = clipboard::cmd_cppwd()?;
-            Ok((false, display, raw))
+            Ok((false, display, raw, None))
         }
         "cpf" => {
             let path = if let Some(p) = parts.get(1) {
@@ -92,7 +92,7 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
             };
             let resolved_path = alias_manager.resolve_path(&path);
             let (display, raw) = clipboard::cmd_cpf(&resolved_path)?;
-            Ok((false, display, raw))
+            Ok((false, display, raw, None))
         }
         "cd" => {
             let path = if parts.len() > 1 {
@@ -102,8 +102,8 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
             } else {
                 None
             };
-            let (display, raw) = cd::cmd_cd(path.as_deref())?;
-            Ok((false, display, raw))
+            let (display, raw, new_prev) = cd::cmd_cd(path.as_deref(), previous_dir)?;
+            Ok((false, display, raw, new_prev))
         }
         "ls" => {
             let mut all = false;
@@ -160,7 +160,7 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
             }
             
             let (display, raw) = ls::cmd_ls(all, long, re, re_insensitive, show_tags, recursive, path.as_deref(), tag_manager, &tag_patterns)?;
-            Ok((false, display, raw))
+            Ok((false, display, raw, None))
         }
         "open" => {
             let path = if let Some(p) = parts.get(1) {
@@ -172,7 +172,7 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
             };
             let resolved_path = alias_manager.resolve_path(&path);
             let (display, raw) = open::cmd_open(&resolved_path)?;
-            Ok((false, display, raw))
+            Ok((false, display, raw, None))
         }
         "mv" => {
             let mut source: Option<String> = None;
@@ -193,33 +193,33 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
             let destination = destination.ok_or("Usage: mv <source_path> <destination_path> [--cp]")?;
             
             let (display, raw) = mv::cmd_mv(&source, &destination, copy)?;
-            Ok((false, display, raw))
+            Ok((false, display, raw, None))
         }
         "alias" => {
             let alias_args: Vec<&str> = parts[1..].iter().map(|s| s.as_str()).collect();
             let (display, raw) = alias::cmd_alias(alias_manager, &alias_args)?;
-            Ok((false, display, raw))
+            Ok((false, display, raw, None))
         }
         "tag" | "t" => {
             let tag_args: Vec<&str> = parts[1..].iter().map(|s| s.as_str()).collect();
             let (display, raw) = tag::cmd_tag(tag_manager, &tag_args)?;
-            Ok((false, display, raw))
+            Ok((false, display, raw, None))
         }
         "exit" | "quit" | "q" => {
-            Ok((true, "👋 Goodbye!".bright_green().to_string(), String::new()))
+            Ok((true, "👋 Goodbye!".bright_green().to_string(), String::new(), None))
         }
         "clear" | "cls" => {
             let (display, raw) = clear::cmd_clear()?;
-            Ok((false, display, raw))
+            Ok((false, display, raw, None))
         }
         "help" | "?" => {
             let (display, raw) = help::cmd_help()?;
-            Ok((false, display, raw))
+            Ok((false, display, raw, None))
         }
         "mkdf" => {
             let mkdf_args: Vec<&str> = parts[1..].iter().map(|s| s.as_str()).collect();
             let (display, raw) = mkdf::cmd_mkdf(&mkdf_args)?;
-            Ok((false, display, raw))
+            Ok((false, display, raw, None))
         }
         _ => {
             let display = format!(
@@ -227,12 +227,12 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
                 "❌".red(),
                 cmd.cyan()
             );
-            Ok((false, display, String::new()))
+            Ok((false, display, String::new(), None))
         }
     }
 }
 
-fn execute_command(input: &str, alias_manager: &mut AliasManager, tag_manager: &mut TagManager) -> Result<bool, Box<dyn std::error::Error>> {
+fn execute_command(input: &str, alias_manager: &mut AliasManager, tag_manager: &mut TagManager, current_previous_dir: &mut Option<String>) -> Result<bool, Box<dyn std::error::Error>> {
     let input = input.replace("\n", " ");
     let command_segments: Vec<&str> = input.split("->").map(|s| s.trim()).collect();
     
@@ -253,10 +253,13 @@ fn execute_command(input: &str, alias_manager: &mut AliasManager, tag_manager: &
             cmd.to_string()
         };
 
-        match execute_single_command(&cmd, &previous_raw_data, alias_manager, tag_manager) {
-            Ok((exit, display_output, raw_data)) => {
+        match execute_single_command(&cmd, &previous_raw_data, alias_manager, tag_manager, current_previous_dir.as_deref()) {
+            Ok((exit, display_output, raw_data, new_prev_dir)) => {
                 println!("{}", display_output);
                 previous_raw_data = raw_data;
+                if let Some(new_prev) = new_prev_dir {
+                    *current_previous_dir = Some(new_prev);
+                }
                 if exit {
                     should_exit = true;
                     break;
@@ -281,6 +284,7 @@ fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut alias_manager = AliasManager::new()?;
     let mut tag_manager = TagManager::new()?;
+    let mut previous_dir: Option<String> = None;
     
     let helper = RfeHelper {
         completer: FilenameCompleter::new(),
@@ -307,7 +311,7 @@ fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 let _ = rl.add_history_entry(input);
 
-                match execute_command(input, &mut alias_manager, &mut tag_manager) {
+                match execute_command(input, &mut alias_manager, &mut tag_manager, &mut previous_dir) {
                     Ok(should_exit) => {
                         if should_exit {
                             break;
@@ -351,8 +355,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut tag_manager = TagManager::new()?;
     let cmd = &args[1].to_lowercase();
     let result = match cmd.as_str() {
-        "pwd" => pwd::cmd_pwd(),
-        "cppwd" => clipboard::cmd_cppwd(),
+        "pwd" => {
+            let (display, raw) = pwd::cmd_pwd()?;
+            Ok((display, raw))
+        }
+        "cppwd" => {
+            let (display, raw) = clipboard::cmd_cppwd()?;
+            Ok((display, raw))
+        }
         "cpf" => {
             let path = args.get(2).map(|s| s.as_str()).ok_or("Usage: rfe cpf <file>")?;
             let resolved_path = alias_manager.resolve_path(path);
@@ -361,7 +371,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "cd" => {
             let path = args.get(2).map(|s| s.as_str());
             let resolved_path = path.map(|p| alias_manager.resolve_path(p));
-            cd::cmd_cd(resolved_path.as_deref())
+            let (display, raw, _) = cd::cmd_cd(resolved_path.as_deref(), None)?;
+            Ok((display, raw))
         }
         "ls" => {
             let mut all = false;
