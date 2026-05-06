@@ -9,6 +9,7 @@ use rustyline::hint::Hinter;
 use rustyline::validate::Validator;
 use rustyline::{Context, Helper};
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use crate::cache::{cache_dir_entries, get_cached_dir_entries};
@@ -21,9 +22,9 @@ pub struct RfeHelper {
     /// 文件名补全器
     pub completer: FilenameCompleter,
     /// 别名管理器
-    pub alias_manager: AliasManager,
+    pub alias_manager: Arc<Mutex<AliasManager>>,
     /// 标签管理器
-    pub tag_manager: TagManager,
+    pub tag_manager: Arc<Mutex<TagManager>>,
 }
 
 impl Completer for RfeHelper {
@@ -49,7 +50,8 @@ impl Completer for RfeHelper {
                 let sub_path = &after_at[sep_pos + 1..];
                 
                 // 获取别名对应的真实路径
-                if let Some(alias_path) = self.alias_manager.get(alias_name) {
+                let alias_manager = self.alias_manager.lock().unwrap();
+                if let Some(alias_path) = alias_manager.get(alias_name) {
                     let base_path = PathBuf::from(alias_path);
                     
                     // 解析子路径，确定要浏览的目录
@@ -146,8 +148,9 @@ impl Completer for RfeHelper {
                 // 纯别名补全（无子路径）
                 let alias_prefix = after_at;
                 let mut candidates = Vec::new();
+                let alias_manager = self.alias_manager.lock().unwrap();
                 
-                for (alias, path) in self.alias_manager.list() {
+                for (alias, path) in alias_manager.list() {
                     if alias.starts_with(alias_prefix) {
                         candidates.push(Pair {
                             display: format!("📍 @{} -> {}", alias, path),
@@ -159,7 +162,7 @@ impl Completer for RfeHelper {
                 // 如果有匹配的别名，同时提供别名的子路径补全
                 if candidates.len() == 1 || alias_prefix.is_empty() {
                     // 获取第一个匹配别名的目录内容作为额外补全
-                    for (alias, path) in self.alias_manager.list() {
+                    for (alias, path) in alias_manager.list() {
                         if alias.starts_with(alias_prefix) {
                             let alias_path = PathBuf::from(path);
                             if alias_path.is_dir() {
@@ -215,8 +218,9 @@ impl Completer for RfeHelper {
                     // 当前正在输入标签
                     let tag_prefix = current_word.split_whitespace().last().unwrap_or("");
                     let mut candidates = Vec::new();
+                    let tag_manager = self.tag_manager.lock().unwrap();
                     
-                    for tag in self.tag_manager.get_all_tags() {
+                    for tag in tag_manager.get_all_tags() {
                         if tag.starts_with(tag_prefix) {
                             candidates.push(Pair {
                                 display: tag.clone(),
@@ -330,8 +334,8 @@ mod tests {
     fn create_helper() -> RfeHelper {
         RfeHelper {
             completer: FilenameCompleter::new(),
-            alias_manager: AliasManager::new().unwrap(),
-            tag_manager: TagManager::new().unwrap(),
+            alias_manager: Arc::new(Mutex::new(AliasManager::new().unwrap())),
+            tag_manager: Arc::new(Mutex::new(TagManager::new().unwrap())),
         }
     }
 

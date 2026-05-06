@@ -1,6 +1,7 @@
 use colored::Colorize;
 use rustyline::{Cmd, KeyCode, KeyEvent, Movement};
 use std::env;
+use std::sync::{Arc, Mutex};
 
 mod utils;
 mod cache;
@@ -23,7 +24,7 @@ fn print_welcome() {
     );
     println!(
         "{}",
-        "║           Rust File Explorer v0.4.0                          ║".bright_green()
+        "║           Rust File Explorer v0.4.1                          ║".bright_green()
     );
     println!(
         "{}",
@@ -64,7 +65,7 @@ fn get_prompt_string() -> String {
     format!("rfe {} >", dir_str)
 }
 
-fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut AliasManager, tag_manager: &mut TagManager, previous_dir: Option<&str>) -> Result<(bool, String, String, Option<String>), Box<dyn std::error::Error>> {
+fn execute_single_command(input: &str, input_data: &str, alias_manager: &Arc<Mutex<AliasManager>>, tag_manager: &Arc<Mutex<TagManager>>, previous_dir: Option<&str>) -> Result<(bool, String, String, Option<String>), Box<dyn std::error::Error>> {
     let parts: Vec<String> = split_command_args(input);
 
     if parts.is_empty() {
@@ -90,13 +91,13 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
             } else {
                 return Err("Usage: cpf <file>".into());
             };
-            let resolved_path = alias_manager.resolve_path(&path);
+            let resolved_path = alias_manager.lock().unwrap().resolve_path(&path);
             let (display, raw) = clipboard::cmd_cpf(&resolved_path)?;
             Ok((false, display, raw, None))
         }
         "cd" => {
             let path = if parts.len() > 1 {
-                Some(alias_manager.resolve_path(&parts[1]))
+                Some(alias_manager.lock().unwrap().resolve_path(&parts[1]))
             } else if !input_data.is_empty() {
                 Some(input_data.to_string())
             } else {
@@ -146,7 +147,7 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
                             return Err("标签查询参数需要指定匹配模式，用法：ls -t <标签正则>".into());
                         }
                     }
-                    p => path = Some(alias_manager.resolve_path(p)),
+                    p => path = Some(alias_manager.lock().unwrap().resolve_path(p)),
                 }
                 i += 1;
             }
@@ -159,7 +160,7 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
                 }
             }
             
-            let (display, raw) = ls::cmd_ls(all, long, re, re_insensitive, show_tags, recursive, path.as_deref(), tag_manager, &tag_patterns)?;
+            let (display, raw) = ls::cmd_ls(all, long, re, re_insensitive, show_tags, recursive, path.as_deref(), &*tag_manager.lock().unwrap(), &tag_patterns)?;
             Ok((false, display, raw, None))
         }
         "open" => {
@@ -170,7 +171,7 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
             } else {
                 return Err("Usage: open <file>".into());
             };
-            let resolved_path = alias_manager.resolve_path(&path);
+            let resolved_path = alias_manager.lock().unwrap().resolve_path(&path);
             let (display, raw) = open::cmd_open(&resolved_path)?;
             Ok((false, display, raw, None))
         }
@@ -183,9 +184,9 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
                 if part == "--cp" {
                     copy = true;
                 } else if source.is_none() {
-                    source = Some(alias_manager.resolve_path(part));
+                    source = Some(alias_manager.lock().unwrap().resolve_path(part));
                 } else if destination.is_none() {
-                    destination = Some(alias_manager.resolve_path(part));
+                    destination = Some(alias_manager.lock().unwrap().resolve_path(part));
                 }
             }
 
@@ -197,12 +198,12 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
         }
         "alias" => {
             let alias_args: Vec<&str> = parts[1..].iter().map(|s| s.as_str()).collect();
-            let (display, raw) = alias::cmd_alias(alias_manager, &alias_args)?;
+            let (display, raw) = alias::cmd_alias(&mut *alias_manager.lock().unwrap(), &alias_args)?;
             Ok((false, display, raw, None))
         }
         "tag" | "t" => {
             let tag_args: Vec<&str> = parts[1..].iter().map(|s| s.as_str()).collect();
-            let (display, raw) = tag::cmd_tag(tag_manager, &tag_args)?;
+            let (display, raw) = tag::cmd_tag(&mut *tag_manager.lock().unwrap(), &tag_args)?;
             Ok((false, display, raw, None))
         }
         "exit" | "quit" | "q" => {
@@ -232,7 +233,7 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &mut Ali
     }
 }
 
-fn execute_command(input: &str, alias_manager: &mut AliasManager, tag_manager: &mut TagManager, current_previous_dir: &mut Option<String>) -> Result<bool, Box<dyn std::error::Error>> {
+fn execute_command(input: &str, alias_manager: &Arc<Mutex<AliasManager>>, tag_manager: &Arc<Mutex<TagManager>>, current_previous_dir: &mut Option<String>) -> Result<bool, Box<dyn std::error::Error>> {
     let input = input.replace("\n", " ");
     let command_segments: Vec<&str> = input.split("->").map(|s| s.trim()).collect();
     
@@ -282,14 +283,14 @@ fn execute_command(input: &str, alias_manager: &mut AliasManager, tag_manager: &
 fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
     print_welcome();
 
-    let mut alias_manager = AliasManager::new()?;
-    let mut tag_manager = TagManager::new()?;
+    let alias_manager = Arc::new(Mutex::new(AliasManager::new()?));
+    let tag_manager = Arc::new(Mutex::new(TagManager::new()?));
     let mut previous_dir: Option<String> = None;
     
     let helper = RfeHelper {
         completer: FilenameCompleter::new(),
-        alias_manager: AliasManager::new()?,
-        tag_manager: TagManager::new()?,
+        alias_manager: Arc::clone(&alias_manager),
+        tag_manager: Arc::clone(&tag_manager),
     };
 
     let mut rl = rustyline::Editor::new()?;
@@ -311,7 +312,7 @@ fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 let _ = rl.add_history_entry(input);
 
-                match execute_command(input, &mut alias_manager, &mut tag_manager, &mut previous_dir) {
+                match execute_command(input, &alias_manager, &tag_manager, &mut previous_dir) {
                     Ok(should_exit) => {
                         if should_exit {
                             break;

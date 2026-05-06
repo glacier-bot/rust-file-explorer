@@ -390,7 +390,7 @@ rfe <command> [arguments]
 | `pwd`                                       | 打印当前工作目录路径                                | `rfe pwd`                                                                 |
 | `cppwd`                                     | 复制当前目录路径到剪贴板                            | `rfe cppwd`                                                               |
 | `cpf <file>`                                | 复制指定文件的绝对路径到剪贴板                      | `rfe cpf README.md`                                                       |
-| `cd`                                        | 切换到用户主目录                                    | `rfe cd`                                                                  |
+| `cd` / `cd ~`                               | 切换到用户主目录                                    | `rfe cd`                                                                  |
 | `cd ..`                                     | 切换到上级目录                                      | `rfe cd ..`                                                               |
 | `cd <path>`                                 | 切换到指定目录                                      | `rfe cd /usr/local/bin`                                                   |
 | `cd -b` / `cd -back`                        | 快速返回上一个工作目录                              | `rfe cd -b`、`rfe cd -back`                                               |
@@ -495,7 +495,7 @@ rfe <command> [arguments]
 
 - 项目地址：[rust-file-explorer: 基于rust的CLI工具](https://gitee.com/glacier-bot/rust-file-explorer)
 - 问题反馈：请提交 [Gitee Issue](https://gitee.com/glacier-bot/rust-file-explorer/issues)
-- 邮箱：[1098644849@qq.com](mailto:1098644849@qq.com)
+- 邮箱：<1098644849@qq.com>
 
 ---
 
