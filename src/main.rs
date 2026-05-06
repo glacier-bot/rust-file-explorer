@@ -3,12 +3,14 @@ use rustyline::{Cmd, KeyCode, KeyEvent, Movement};
 use std::env;
 use std::sync::{Arc, Mutex};
 
-mod utils;
 mod cache;
-mod models;
-mod managers;
 mod commands;
 mod helper;
+mod managers;
+mod models;
+mod utils;
+
+use crate::utils::moe::{self, is_moe};
 
 use crate::utils::split_command_args;
 
@@ -18,41 +20,157 @@ use crate::managers::{alias::AliasManager, tag::TagManager};
 use rustyline::completion::FilenameCompleter;
 
 fn print_welcome() {
-    println!(
-        "{}",
-        "╔══════════════════════════════════════════════════════════════╗".bright_green()
-    );
-    println!(
-        "{}",
-        "║           Rust File Explorer v0.4.1                          ║".bright_green()
-    );
-    println!(
-        "{}",
-        "║           A cross-platform CLI file browser                  ║".bright_green()
-    );
-    println!(
-        "{}",
-        "╚══════════════════════════════════════════════════════════════╝".bright_green()
-    );
-    println!();
-    println!("{}", "Commands:".bright_yellow());
-    println!("  {}  - List directory contents (supports --re regex search, -t tag filter)", "ls".cyan());
-    println!("  {}  - Print working directory", "pwd".cyan());
-    println!("  {}  - Copy current directory path to clipboard", "cppwd".cyan());
-    println!("  {}  - Copy file absolute path to clipboard", "cpf <file>".cyan());
-    println!("  {}  - Change directory (use cd -b/-back to go back)\n", "cd <path>".cyan());
-    println!("  {}  - Open file with default application / Open directory in file explorer", "open <path>".cyan());
-    println!("  {}  - Move/copy file or folder (use --cp to copy)", "mv <source> <dest> [--cp]".cyan());
-    println!("  {}  - Create file or directory (-f for file, -d for directory)", "mkdf".cyan());
-    println!("  {}  - Manage path aliases (add/remove/list)", "alias".cyan());
-    println!("  {}  - Manage file tags (add/remove/find/list/backup)", "tag".cyan());
-    println!("  {}  - Exit the program", "exit".cyan());
-    println!("  {} - Clear the screen", "clear".cyan());
-    println!("  {}  - Show this help", "help".cyan());
-    println!();
-    println!("{}", "Keyboard shortcuts:".bright_yellow());
-    println!("  {} - Clear current input line in REPL mode", "ESC".cyan());
-    println!();
+    if is_moe() {
+        println!(
+            "{}",
+            "╔══════════════════════════════════════════════════════════════╗"
+                .truecolor(255, 105, 180)
+        );
+        println!(
+            "{}{}{}",
+            "║ ".truecolor(255, 105, 180),
+            "        🌸✨ Rust File Explorer v0.5.0 ✨🌸                 ".truecolor(255, 182, 193),
+            " ║".truecolor(255, 105, 180)
+        );
+        println!(
+            "{}{}{}",
+            "║ ".truecolor(255, 105, 180),
+            "     ciallo∠・ω⌒☆ Welcome to the moe moe mode！💕           ".truecolor(255, 182, 193),
+            " ║".truecolor(255, 105, 180)
+        );
+        println!(
+            "{}{}{}",
+            "║ ".truecolor(255, 105, 180),
+            "         A cross-platform CLI file browser 💕               ".truecolor(255, 182, 193),
+            " ║".truecolor(255, 105, 180)
+        );
+        println!(
+            "{}",
+            "╚══════════════════════════════════════════════════════════════╝"
+                .truecolor(255, 105, 180)
+        );
+        println!();
+        println!("{} 💕", "💖 Commands:".truecolor(255, 160, 122));
+        println!(
+            "  {}  - List directory contents (supports --re regex search, -t tag filter) ✨",
+            "ls".truecolor(255, 182, 193)
+        );
+        println!(
+            "  {}  - Print working directory 💫",
+            "pwd".truecolor(255, 182, 193)
+        );
+        println!(
+            "  {}  - Copy current directory path to clipboard 💖",
+            "cppwd".truecolor(255, 182, 193)
+        );
+        println!(
+            "  {}  - Copy file absolute path to clipboard 💗",
+            "cpf <file>".truecolor(255, 182, 193)
+        );
+        println!(
+            "  {}  - Change directory (use cd -b/-back to go back) 🌸\n",
+            "cd <path>".truecolor(255, 182, 193)
+        );
+        println!(
+            "  {}  - Open file with default application / Open directory in file explorer 📂",
+            "open <path>".truecolor(255, 182, 193)
+        );
+        println!(
+            "  {}  - Move/copy file or folder (use --cp to copy) 💫",
+            "mv <source> <dest> [--cp]".truecolor(255, 182, 193)
+        );
+        println!(
+            "  {}  - Create file or directory (-f for file, -d for directory) ✨",
+            "mkdf".truecolor(255, 182, 193)
+        );
+        println!(
+            "  {}  - Manage path aliases (add/remove/list) 💖",
+            "alias".truecolor(255, 182, 193)
+        );
+        println!(
+            "  {}  - Manage file tags (add/remove/find/list/backup) 💕",
+            "tag".truecolor(255, 182, 193)
+        );
+        println!(
+            "  {}  - Exit the program 👋",
+            "exit".truecolor(255, 182, 193)
+        );
+        println!(
+            "  {} - Clear the screen ✨",
+            "clear".truecolor(255, 182, 193)
+        );
+        println!("  {}  - Show this help 💖", "help".truecolor(255, 182, 193));
+        println!();
+        println!("{} 💕", "💖 Keyboard shortcuts:".truecolor(255, 160, 122));
+        println!(
+            "  {} - Clear current input line in REPL mode ✨",
+            "ESC".truecolor(255, 182, 193)
+        );
+        println!();
+    } else {
+        println!(
+            "{}",
+            "╔══════════════════════════════════════════════════════════════╗".bright_green()
+        );
+        println!(
+            "{}",
+            "║           Rust File Explorer v0.5.0                          ║".bright_green()
+        );
+        println!(
+            "{}",
+            "║           A cross-platform CLI file browser                  ║".bright_green()
+        );
+        println!(
+            "{}",
+            "╚══════════════════════════════════════════════════════════════╝".bright_green()
+        );
+        println!();
+        println!("{}", "Commands:".bright_yellow());
+        println!(
+            "  {}  - List directory contents (supports --re regex search, -t tag filter)",
+            "ls".cyan()
+        );
+        println!("  {}  - Print working directory", "pwd".cyan());
+        println!(
+            "  {}  - Copy current directory path to clipboard",
+            "cppwd".cyan()
+        );
+        println!(
+            "  {}  - Copy file absolute path to clipboard",
+            "cpf <file>".cyan()
+        );
+        println!(
+            "  {}  - Change directory (use cd -b/-back to go back)\n",
+            "cd <path>".cyan()
+        );
+        println!(
+            "  {}  - Open file with default application / Open directory in file explorer",
+            "open <path>".cyan()
+        );
+        println!(
+            "  {}  - Move/copy file or folder (use --cp to copy)",
+            "mv <source> <dest> [--cp]".cyan()
+        );
+        println!(
+            "  {}  - Create file or directory (-f for file, -d for directory)",
+            "mkdf".cyan()
+        );
+        println!(
+            "  {}  - Manage path aliases (add/remove/list)",
+            "alias".cyan()
+        );
+        println!(
+            "  {}  - Manage file tags (add/remove/find/list/backup)",
+            "tag".cyan()
+        );
+        println!("  {}  - Exit the program", "exit".cyan());
+        println!("  {} - Clear the screen", "clear".cyan());
+        println!("  {}  - Show this help", "help".cyan());
+        println!();
+        println!("{}", "Keyboard shortcuts:".bright_yellow());
+        println!("  {} - Clear current input line in REPL mode", "ESC".cyan());
+        println!();
+    }
 }
 
 fn get_prompt_string() -> String {
@@ -62,10 +180,20 @@ fn get_prompt_string() -> String {
         .and_then(|n| n.to_str())
         .unwrap_or("/");
 
-    format!("rfe {} >", dir_str)
+    if is_moe() {
+        format!("rfe 🌸 {} 💖 >", dir_str)
+    } else {
+        format!("rfe {} >", dir_str)
+    }
 }
 
-fn execute_single_command(input: &str, input_data: &str, alias_manager: &Arc<Mutex<AliasManager>>, tag_manager: &Arc<Mutex<TagManager>>, previous_dir: Option<&str>) -> Result<(bool, String, String, Option<String>), Box<dyn std::error::Error>> {
+fn execute_single_command(
+    input: &str,
+    input_data: &str,
+    alias_manager: &Arc<Mutex<AliasManager>>,
+    tag_manager: &Arc<Mutex<TagManager>>,
+    previous_dir: Option<&str>,
+) -> Result<(bool, String, String, Option<String>), Box<dyn std::error::Error>> {
     let parts: Vec<String> = split_command_args(input);
 
     if parts.is_empty() {
@@ -115,7 +243,7 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &Arc<Mut
             let mut recursive = false;
             let mut path: Option<String> = None;
             let mut tag_pattern_strs: Vec<String> = Vec::new();
-            
+
             let mut i = 1;
             while i < parts.len() {
                 match parts[i].as_str() {
@@ -135,23 +263,25 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &Arc<Mut
                     "-tag" | "--tags" => show_tags = true,
                     "-t" | "--tag" => {
                         if i + 1 < parts.len() {
-                            if parts[i+1] == "--deep" && i + 2 < parts.len() {
+                            if parts[i + 1] == "--deep" && i + 2 < parts.len() {
                                 recursive = true;
-                                tag_pattern_strs.push(parts[i+2].clone());
+                                tag_pattern_strs.push(parts[i + 2].clone());
                                 i += 2;
                             } else {
-                                tag_pattern_strs.push(parts[i+1].clone());
+                                tag_pattern_strs.push(parts[i + 1].clone());
                                 i += 1;
                             }
                         } else {
-                            return Err("标签查询参数需要指定匹配模式，用法：ls -t <标签正则>".into());
+                            return Err(
+                                "标签查询参数需要指定匹配模式，用法：ls -t <标签正则>".into()
+                            );
                         }
                     }
                     p => path = Some(alias_manager.lock().unwrap().resolve_path(p)),
                 }
                 i += 1;
             }
-            
+
             let mut tag_patterns = Vec::new();
             for pattern_str in tag_pattern_strs {
                 match regex::Regex::new(&pattern_str) {
@@ -159,8 +289,18 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &Arc<Mut
                     Err(e) => return Err(format!("标签正则表达式无效: {}", e).into()),
                 }
             }
-            
-            let (display, raw) = ls::cmd_ls(all, long, re, re_insensitive, show_tags, recursive, path.as_deref(), &*tag_manager.lock().unwrap(), &tag_patterns)?;
+
+            let (display, raw) = ls::cmd_ls(
+                all,
+                long,
+                re,
+                re_insensitive,
+                show_tags,
+                recursive,
+                path.as_deref(),
+                &tag_manager.lock().unwrap(),
+                &tag_patterns,
+            )?;
             Ok((false, display, raw, None))
         }
         "open" => {
@@ -191,23 +331,41 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &Arc<Mut
             }
 
             let source = source.ok_or("Usage: mv <source_path> <destination_path> [--cp]")?;
-            let destination = destination.ok_or("Usage: mv <source_path> <destination_path> [--cp]")?;
-            
+            let destination =
+                destination.ok_or("Usage: mv <source_path> <destination_path> [--cp]")?;
+
             let (display, raw) = mv::cmd_mv(&source, &destination, copy)?;
             Ok((false, display, raw, None))
         }
         "alias" => {
             let alias_args: Vec<&str> = parts[1..].iter().map(|s| s.as_str()).collect();
-            let (display, raw) = alias::cmd_alias(&mut *alias_manager.lock().unwrap(), &alias_args)?;
+            let (display, raw) =
+                alias::cmd_alias(&mut alias_manager.lock().unwrap(), &alias_args)?;
             Ok((false, display, raw, None))
         }
         "tag" | "t" => {
             let tag_args: Vec<&str> = parts[1..].iter().map(|s| s.as_str()).collect();
-            let (display, raw) = tag::cmd_tag(&mut *tag_manager.lock().unwrap(), &tag_args)?;
+            let (display, raw) = tag::cmd_tag(&mut tag_manager.lock().unwrap(), &tag_args)?;
             Ok((false, display, raw, None))
         }
         "exit" | "quit" | "q" => {
-            Ok((true, "👋 Goodbye!".bright_green().to_string(), String::new(), None))
+            if is_moe() {
+                Ok((
+                    true,
+                    "👋🌸💖 Bye-bye! See you next time~ 💕"
+                        .truecolor(255, 182, 193)
+                        .to_string(),
+                    String::new(),
+                    None,
+                ))
+            } else {
+                Ok((
+                    true,
+                    "👋 Goodbye!".bright_green().to_string(),
+                    String::new(),
+                    None,
+                ))
+            }
         }
         "clear" | "cls" => {
             let (display, raw) = clear::cmd_clear()?;
@@ -223,20 +381,35 @@ fn execute_single_command(input: &str, input_data: &str, alias_manager: &Arc<Mut
             Ok((false, display, raw, None))
         }
         _ => {
-            let display = format!(
-                "{} Command not found: {}. Type 'help' for available commands.",
-                "❌".red(),
-                cmd.cyan()
-            );
-            Ok((false, display, String::new(), None))
+            if is_moe() {
+                let display = format!(
+                    "{} {} Command not found: {}. Type 'help' for available commands~ 💕",
+                    "😢".truecolor(255, 105, 180),
+                    "💔".truecolor(255, 105, 180),
+                    cmd.truecolor(255, 182, 193)
+                );
+                Ok((false, display, String::new(), None))
+            } else {
+                let display = format!(
+                    "{} Command not found: {}. Type 'help' for available commands.",
+                    "❌".red(),
+                    cmd.cyan()
+                );
+                Ok((false, display, String::new(), None))
+            }
         }
     }
 }
 
-fn execute_command(input: &str, alias_manager: &Arc<Mutex<AliasManager>>, tag_manager: &Arc<Mutex<TagManager>>, current_previous_dir: &mut Option<String>) -> Result<bool, Box<dyn std::error::Error>> {
+fn execute_command(
+    input: &str,
+    alias_manager: &Arc<Mutex<AliasManager>>,
+    tag_manager: &Arc<Mutex<TagManager>>,
+    current_previous_dir: &mut Option<String>,
+) -> Result<bool, Box<dyn std::error::Error>> {
     let input = input.replace("\n", " ");
     let command_segments: Vec<&str> = input.split("->").map(|s| s.trim()).collect();
-    
+
     let mut previous_raw_data = String::new();
     let mut should_exit = false;
 
@@ -246,15 +419,25 @@ fn execute_command(input: &str, alias_manager: &Arc<Mutex<AliasManager>>, tag_ma
         }
 
         let continue_on_error = segment.ends_with('!');
-        let cmd = if continue_on_error { &segment[..segment.len()-1] } else { segment };
-        
+        let cmd = if continue_on_error {
+            &segment[..segment.len() - 1]
+        } else {
+            segment
+        };
+
         let cmd = if cmd.contains("{}") {
             cmd.replace("{}", &previous_raw_data)
         } else {
             cmd.to_string()
         };
 
-        match execute_single_command(&cmd, &previous_raw_data, alias_manager, tag_manager, current_previous_dir.as_deref()) {
+        match execute_single_command(
+            &cmd,
+            &previous_raw_data,
+            alias_manager,
+            tag_manager,
+            current_previous_dir.as_deref(),
+        ) {
             Ok((exit, display_output, raw_data, new_prev_dir)) => {
                 println!("{}", display_output);
                 previous_raw_data = raw_data;
@@ -267,7 +450,16 @@ fn execute_command(input: &str, alias_manager: &Arc<Mutex<AliasManager>>, tag_ma
                 }
             }
             Err(e) => {
-                let error_msg = format!("{} {}", "❌ Error:".red(), e.to_string().bright_red());
+                let error_msg = if is_moe() {
+                    format!(
+                        "{} {} {}",
+                        "😢💔".truecolor(255, 105, 180),
+                        "Error:".truecolor(255, 105, 180),
+                        e.to_string().truecolor(255, 182, 193)
+                    )
+                } else {
+                    format!("{} {}", "❌ Error:".red(), e.to_string().bright_red())
+                };
                 println!("{}", error_msg);
                 previous_raw_data = String::new();
                 if !continue_on_error {
@@ -286,7 +478,7 @@ fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
     let alias_manager = Arc::new(Mutex::new(AliasManager::new()?));
     let tag_manager = Arc::new(Mutex::new(TagManager::new()?));
     let mut previous_dir: Option<String> = None;
-    
+
     let helper = RfeHelper {
         completer: FilenameCompleter::new(),
         alias_manager: Arc::clone(&alias_manager),
@@ -294,12 +486,12 @@ fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let mut rl = rustyline::Editor::new()?;
-    
+
     rl.bind_sequence(
         KeyEvent(KeyCode::Esc, rustyline::Modifiers::NONE),
         Cmd::Kill(Movement::WholeLine),
     );
-    
+
     rl.set_helper(Some(helper));
 
     loop {
@@ -352,9 +544,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
+    if args[1] == "-moe" || args[1] == "--moe" {
+        moe::enable_moe();
+        if args.len() == 2 {
+            if let Err(e) = run_repl() {
+                eprintln!(
+                    "{} {} {}",
+                    "😢💔".truecolor(255, 105, 180),
+                    "Error:".truecolor(255, 105, 180),
+                    e.to_string().truecolor(255, 182, 193)
+                );
+                std::process::exit(1);
+            }
+            return Ok(());
+        }
+    }
+
     let mut alias_manager = AliasManager::new()?;
     let mut tag_manager = TagManager::new()?;
-    let cmd = &args[1].to_lowercase();
+
+    let (cmd, arg_offset) = if args[1] == "-moe" || args[1] == "--moe" {
+        moe::enable_moe();
+        (&args[2].to_lowercase(), 2)
+    } else {
+        (&args[1].to_lowercase(), 1)
+    };
     let result = match cmd.as_str() {
         "pwd" => {
             let (display, raw) = pwd::cmd_pwd()?;
@@ -365,12 +579,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok((display, raw))
         }
         "cpf" => {
-            let path = args.get(2).map(|s| s.as_str()).ok_or("Usage: rfe cpf <file>")?;
+            let path = args
+                .get(arg_offset + 1)
+                .map(|s| s.as_str())
+                .ok_or("Usage: rfe cpf <file>")?;
             let resolved_path = alias_manager.resolve_path(path);
             clipboard::cmd_cpf(&resolved_path)
         }
         "cd" => {
-            let path = args.get(2).map(|s| s.as_str());
+            let path = args.get(arg_offset + 1).map(|s| s.as_str());
             let resolved_path = path.map(|p| alias_manager.resolve_path(p));
             let (display, raw, _) = cd::cmd_cd(resolved_path.as_deref(), None)?;
             Ok((display, raw))
@@ -384,8 +601,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut recursive = false;
             let mut path: Option<String> = None;
             let mut tag_pattern_strs: Vec<String> = Vec::new();
-            
-            let mut i = 2;
+
+            let mut i = arg_offset + 1;
             while i < args.len() {
                 match args[i].as_str() {
                     "-a" | "--all" => all = true,
@@ -404,23 +621,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "-tag" | "--tags" => show_tags = true,
                     "-t" | "--tag" => {
                         if i + 1 < args.len() {
-                            if args[i+1] == "--deep" && i + 2 < args.len() {
+                            if args[i + 1] == "--deep" && i + 2 < args.len() {
                                 recursive = true;
-                                tag_pattern_strs.push(args[i+2].clone());
+                                tag_pattern_strs.push(args[i + 2].clone());
                                 i += 2;
                             } else {
-                                tag_pattern_strs.push(args[i+1].clone());
+                                tag_pattern_strs.push(args[i + 1].clone());
                                 i += 1;
                             }
                         } else {
-                            return Err("标签查询参数需要指定匹配模式，用法：ls -t <标签正则>".into());
+                            return Err(
+                                "标签查询参数需要指定匹配模式，用法：ls -t <标签正则>".into()
+                            );
                         }
                     }
                     p => path = Some(alias_manager.resolve_path(p)),
                 }
                 i += 1;
             }
-            
+
             let mut tag_patterns = Vec::new();
             for pattern_str in tag_pattern_strs {
                 match regex::Regex::new(&pattern_str) {
@@ -428,11 +647,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Err(e) => return Err(format!("标签正则表达式无效: {}", e).into()),
                 }
             }
-            
-            ls::cmd_ls(all, long, re, re_insensitive, show_tags, recursive, path.as_deref(), &tag_manager, &tag_patterns)
+
+            ls::cmd_ls(
+                all,
+                long,
+                re,
+                re_insensitive,
+                show_tags,
+                recursive,
+                path.as_deref(),
+                &tag_manager,
+                &tag_patterns,
+            )
         }
         "open" => {
-            let path = args.get(2).map(|s| s.as_str()).ok_or("Usage: rfe open <file>")?;
+            let path = args
+                .get(arg_offset + 1)
+                .map(|s| s.as_str())
+                .ok_or("Usage: rfe open <file>")?;
             let resolved_path = alias_manager.resolve_path(path);
             open::cmd_open(&resolved_path)
         }
@@ -441,7 +673,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut destination: Option<String> = None;
             let mut copy = false;
 
-            for arg in &args[2..] {
+            for arg in &args[arg_offset + 1..] {
                 if arg == "--cp" {
                     copy = true;
                 } else if source.is_none() {
@@ -452,40 +684,74 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             let source = source.ok_or("Usage: rfe mv <source_path> <destination_path> [--cp]")?;
-            let destination = destination.ok_or("Usage: rfe mv <source_path> <destination_path> [--cp]")?;
-            
+            let destination =
+                destination.ok_or("Usage: rfe mv <source_path> <destination_path> [--cp]")?;
+
             mv::cmd_mv(&source, &destination, copy)
         }
         "alias" => {
-            let alias_args: Vec<&str> = args[2..].iter().map(|s| s.as_str()).collect();
+            let alias_args: Vec<&str> = args[arg_offset + 1..].iter().map(|s| s.as_str()).collect();
             alias::cmd_alias(&mut alias_manager, &alias_args)
         }
         "tag" | "t" => {
-            let tag_args: Vec<&str> = args[2..].iter().map(|s| s.as_str()).collect();
+            let tag_args: Vec<&str> = args[arg_offset + 1..].iter().map(|s| s.as_str()).collect();
             tag::cmd_tag(&mut tag_manager, &tag_args)
         }
         "exit" => {
-            Ok(("👋 Goodbye!".bright_green().to_string(), String::new()))
+            if is_moe() {
+                Ok((
+                    "👋🌸💖 Bye-bye! See you next time~ 💕"
+                        .truecolor(255, 182, 193)
+                        .to_string(),
+                    String::new(),
+                ))
+            } else {
+                Ok(("👋 Goodbye!".bright_green().to_string(), String::new()))
+            }
         }
         "clear" => clear::cmd_clear(),
         "help" => help::cmd_help(),
         "mkdf" => {
-            let mkdf_args: Vec<&str> = args[2..].iter().map(|s| s.as_str()).collect();
+            let mkdf_args: Vec<&str> = args[arg_offset + 1..].iter().map(|s| s.as_str()).collect();
             mkdf::cmd_mkdf(&mkdf_args)
         }
         _ => {
-            Ok((format!(
-                "{} Command not found: {}. Type 'rfe help' for available commands.",
-                "❌".red(),
-                cmd.cyan()
-            ), String::new()))
+            if is_moe() {
+                Ok((
+                    format!(
+                        "{} {} Command not found: {}. Type 'rfe help' for available commands~ 💕",
+                        "😢".truecolor(255, 105, 180),
+                        "💔".truecolor(255, 105, 180),
+                        cmd.truecolor(255, 182, 193)
+                    ),
+                    String::new(),
+                ))
+            } else {
+                Ok((
+                    format!(
+                        "{} Command not found: {}. Type 'rfe help' for available commands.",
+                        "❌".red(),
+                        cmd.cyan()
+                    ),
+                    String::new(),
+                ))
+            }
         }
     };
 
     match result {
         Ok((output, _raw)) => println!("{}", output),
         Err(e) => {
-            eprintln!("{} {}", "❌ Error:".red(), e.to_string().bright_red());
+            if is_moe() {
+                eprintln!(
+                    "{} {} {}",
+                    "😢💔".truecolor(255, 105, 180),
+                    "Error:".truecolor(255, 105, 180),
+                    e.to_string().truecolor(255, 182, 193)
+                );
+            } else {
+                eprintln!("{} {}", "❌ Error:".red(), e.to_string().bright_red());
+            }
             std::process::exit(1);
         }
     }

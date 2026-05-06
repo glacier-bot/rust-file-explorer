@@ -11,6 +11,7 @@ use crate::models::FileInfo;
 use crate::utils::format::{center_text, format_size, format_time_absolute, pad_to_width, truncate_string};
 use crate::utils::terminal::{calculate_column_widths, get_terminal_width, make_separator};
 use crate::utils::path::is_hidden;
+use crate::utils::moe::is_moe;
 
 pub fn get_file_icon_and_color(path: &Path, metadata: &std::fs::Metadata) -> (&'static str, Color) {
     if metadata.is_dir() {
@@ -72,11 +73,19 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
             env::current_dir()?
         };
 
-        output.push_str(&format!(
-            "{} {}\n\n",
-            "🔍 Regex Search:".bright_yellow().bold(),
-            pattern.bright_cyan()
-        ));
+        if is_moe() {
+            output.push_str(&format!(
+                "{} {}\n\n",
+                "💫🔍 Regex Search~:".truecolor(255, 160, 122).bold(),
+                pattern.truecolor(255, 182, 193)
+            ));
+        } else {
+            output.push_str(&format!(
+                "{} {}\n\n",
+                "🔍 Regex Search:".bright_yellow().bold(),
+                pattern.bright_cyan()
+            ));
+        }
 
         fn walk_dir(dir: &Path, pattern: &Regex, all: bool, show_tags: bool, recursive: bool, tag_manager: &TagManager, files: &mut Vec<FileInfo>, dirs: &mut Vec<FileInfo>) -> Result<(), Box<dyn std::error::Error>> {
             for entry in fs::read_dir(dir)?.filter_map(|e| e.ok()) {
@@ -162,11 +171,19 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
             return Err(format!("Path does not exist: {}", target.display()).into());
         }
 
-        output.push_str(&format!(
-            "{} {}\n\n",
-            "📂 Directory:".bright_yellow().bold(),
-            target.display().to_string().bright_cyan()
-        ));
+        if is_moe() {
+            output.push_str(&format!(
+                "{} {}\n\n",
+                "🌸📂 Directory~:".truecolor(255, 160, 122).bold(),
+                target.display().to_string().truecolor(255, 182, 193)
+            ));
+        } else {
+            output.push_str(&format!(
+                "{} {}\n\n",
+                "📂 Directory:".bright_yellow().bold(),
+                target.display().to_string().bright_cyan()
+            ));
+        }
 
         if !tag_patterns.is_empty() && recursive {
             fn walk_dir_for_tags(dir: &Path, all: bool, show_tags: bool, tag_manager: &TagManager, files: &mut Vec<FileInfo>, dirs: &mut Vec<FileInfo>) -> Result<(), Box<dyn std::error::Error>> {
@@ -445,12 +462,21 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
     let dir_count = all_items.iter().filter(|f| f.is_dir).count();
     let file_count = total - dir_count;
 
-    output.push_str(&format!(
-        "{} {} directories, {} files\n\n",
-        "📊".bright_green(),
-        dir_count.to_string().bright_blue(),
-        file_count.to_string().bright_cyan()
-    ));
+    if is_moe() {
+        output.push_str(&format!(
+            "{} {} directories, {} files~ 💕\n\n",
+            "✨📊".truecolor(255, 105, 180),
+            dir_count.to_string().truecolor(255, 182, 193),
+            file_count.to_string().truecolor(255, 192, 203)
+        ));
+    } else {
+        output.push_str(&format!(
+            "{} {} directories, {} files\n\n",
+            "📊".bright_green(),
+            dir_count.to_string().bright_blue(),
+            file_count.to_string().bright_cyan()
+        ));
+    }
     
     let raw_path = if re {
         let search_dir = match path {

@@ -4,6 +4,7 @@
 pub mod format;
 pub mod terminal;
 pub mod path;
+pub mod moe;
 
 /// 智能分割命令行参数，支持引号包围的参数
 /// 例如："cd 'my folder'" 会被分割为 ["cd", "my folder"]

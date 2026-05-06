@@ -304,7 +304,20 @@ impl Highlighter for RfeHelper {
         prompt: &'p str,
         _default: bool,
     ) -> std::borrow::Cow<'b, str> {
-        if prompt.starts_with("rfe ") && prompt.ends_with(" >") {
+        if prompt.starts_with("rfe 🌸 ") && prompt.contains(" 💖 >") {
+            let start = "rfe 🌸 ".len();
+            let end = prompt.find(" 💖 >").unwrap_or(prompt.len());
+            let dir = &prompt[start..end];
+            let colored = format!(
+                "{} {} {} {} {}",
+                "rfe".truecolor(255, 105, 180).bold(),
+                "🌸".truecolor(255, 182, 193),
+                dir.truecolor(255, 182, 193).bold(),
+                "💖".truecolor(255, 105, 180),
+                ">".truecolor(255, 105, 180).bold()
+            );
+            std::borrow::Cow::Owned(colored)
+        } else if prompt.starts_with("rfe ") && prompt.ends_with(" >") {
             let dir = &prompt[4..prompt.len() - 2];
             let colored = format!(
                 "{} {} {}",
