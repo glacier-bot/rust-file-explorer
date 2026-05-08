@@ -516,6 +516,47 @@ rfe <command> [arguments]
   - Linux/macOS: `~/.config/rfe/tags.json`、`~/.config/rfe/tags.json.bak`
 - `ls -tag`参数可以在列出文件时同时显示其关联的标签，方便查看
 
+***
+
+## 💡 使用技巧
+
+### 🏷️ 为文件夹设置标签的技巧
+
+由于标签功能目前主要针对文件设计，但你可以通过一个简单的技巧为文件夹设置标签：
+
+#### 方法：使用 `.index` 标记文件
+
+在需要设置标签的文件夹下创建一个名为 `.index` 的隐藏文件，然后为这个 `.index` 文件设置标签。这样，当你使用 `tag find` 或 `ls -t` 命令时，可以通过标签定位到包含该 `.index` 文件的文件夹。
+
+#### 使用步骤
+
+1. 在目标文件夹内创建 `.index` 文件：
+   ```bash
+   mkdf -f /path/to/folder/.index
+   ```
+
+2. 为 `.index` 文件添加标签：
+   ```bash
+   tag add /path/to/folder/.index work project important
+   ```
+
+3. 搜索包含该标签的文件夹：
+   ```bash
+   tag find work project
+   ```
+
+4. 列出当前目录下带有指定标签的文件夹（通过 .index 文件）：
+   ```bash
+   ls -t work
+   ```
+
+#### 优势
+
+- **语义清晰：`.index` 文件作为文件夹的索引标记
+- **跨平台兼容：隐藏文件在 Windows/Linux/macOS 都支持
+- **易于管理：可以随时修改或删除 `.index` 文件来管理文件夹的标签
+- **与现有功能兼容：无需修改代码，直接使用现有的标签系统
+
 ## 🤝 贡献指南
 
 欢迎任何形式的贡献！无论是提交 Bug 报告、功能建议还是代码贡献，都非常感谢。
