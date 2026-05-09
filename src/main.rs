@@ -339,8 +339,7 @@ fn execute_single_command(
         }
         "alias" => {
             let alias_args: Vec<&str> = parts[1..].iter().map(|s| s.as_str()).collect();
-            let (display, raw) =
-                alias::cmd_alias(&mut alias_manager.lock().unwrap(), &alias_args)?;
+            let (display, raw) = alias::cmd_alias(&mut alias_manager.lock().unwrap(), &alias_args)?;
             Ok((false, display, raw, None))
         }
         "tag" | "t" => {
@@ -758,3 +757,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+// todo: mv命令批量操作，移动和复制过程可视化

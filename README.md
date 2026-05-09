@@ -26,7 +26,7 @@
 
 本节详细介绍 rfe 的两项核心语法特性：**`@`** **路径别名** 与 **`->`** **命令链式执行**。理解这两个概念将显著提升你在终端中的文件操作效率。
 
-***
+---
 
 ### 🔖 `@` — 路径别名（Path Alias）
 
@@ -41,10 +41,10 @@
 
 #### 管理别名
 
-| 命令                        | 说明      | 示例                               |
-| ------------------------- | ------- | -------------------------------- |
+| 命令                      | 说明          | 示例                             |
+| ------------------------- | ------------- | -------------------------------- |
 | `alias add <name> <path>` | 添加/更新别名 | `rfe alias add docs ~/Documents` |
-| `alias remove <name>`     | 删除别名    | `rfe alias remove docs`          |
+| `alias remove <name>`     | 删除别名      | `rfe alias remove docs`          |
 | `alias list`              | 列出所有别名  | `rfe alias list`                 |
 
 #### 使用示例
@@ -80,7 +80,7 @@ rfe mv temp.txt @dl/archive/
 - **资源目录**：为 Downloads、Documents、Desktop 等常用目录设置短别名
 - **深路径导航**：避免反复输入深层嵌套的路径（如 `~/company/team/project/module/src`）
 
-***
+---
 
 ### 🔗 `->` — 命令链式执行（Command Chain）
 
@@ -135,7 +135,7 @@ rfe cd maybe_nonexist_dir ->! ls
 - **脚本化工作流**：将日常重复的多步操作浓缩为一条命令链，减少键盘输入
 - **容错脚本**：在不确定某个目录或文件是否存在时，使用 `->!` 确保后续关键步骤依然执行
 
-***
+---
 
 ### 📍 `{}` — 占位符扩展（Placeholder Expansion）
 
@@ -177,7 +177,7 @@ rfe cd maybe_nonexist ->! cppwd -> alias add fallback {}
 - **多次使用同一输出**：当一条命令中需要多次引用前一个输出时
 - **复杂命令构造**：需要精确控制输出在命令中的位置，而非默认的第一个参数位置
 
-***
+---
 
 ### 📦 `mkdf` — 多功能文件/文件夹创建命令
 
@@ -225,7 +225,7 @@ mkdf --help
 - **创建嵌套目录结构**：一次性创建完整的目录树，无需手动逐层创建
 - **配合其他命令使用**：与命令链结合使用，实现复杂的文件创建流程
 
-***
+---
 
 ### ⌨️ ESC 键清空输入 — REPL 模式便捷操作
 
@@ -244,7 +244,7 @@ mkdf --help
 - **输入内容过长**：一次性清空，无需逐字符退格
 - **改变主意**：决定不执行当前输入的命令，快速清空
 
-***
+---
 
 ### 🔙 `cd -b/-back` — 快速返回上一个目录
 
@@ -293,7 +293,7 @@ cd @proj -> ls src -> cd -b -> pwd
 - **多层导航后返回**：在深层目录中操作后，快速返回到起点
 - **命令链导航**：配合 `->` 命令链，实现复杂的目录浏览流程
 
-***
+---
 
 ### 🌸 `-moe` — Moe Moe 模式
 
@@ -339,22 +339,22 @@ rfe -moe help
 - **个性化**：展示你的独特终端风格
 - **演示展示**：在演示或教学中使用，增加趣味性
 
-***
+---
 
 ## 🛠️ 技术栈
 
-| 技术/依赖         | 版本           | 用途                     |
-| ------------- | ------------ | ---------------------- |
-| Rust          | 2021 Edition | 核心开发语言                 |
-| colored       | 2.1          | 终端彩色输出                 |
-| dirs          | 5.0          | 跨平台系统目录路径获取            |
+| 技术/依赖     | 版本         | 用途                                 |
+| ------------- | ------------ | ------------------------------------ |
+| Rust          | 2021 Edition | 核心开发语言                         |
+| colored       | 2.1          | 终端彩色输出                         |
+| dirs          | 5.0          | 跨平台系统目录路径获取               |
 | unicode-width | 0.1          | Unicode 字符串宽度计算，优化界面排版 |
-| open          | 5.0          | 调用系统默认应用打开文件           |
-| rustyline     | 12.0         | 命令行交互框架，支持补全、历史记录      |
-| arboard       | 3.4          | 跨平台剪贴板操作               |
-| regex         | 1.10         | 正则表达式搜索支持              |
-| serde         | 1.0          | 序列化/反序列化支持             |
-| serde\_json   | 1.0          | JSON格式数据持久化            |
+| open          | 5.0          | 调用系统默认应用打开文件             |
+| rustyline     | 12.0         | 命令行交互框架，支持补全、历史记录   |
+| arboard       | 3.4          | 跨平台剪贴板操作                     |
+| regex         | 1.10         | 正则表达式搜索支持                   |
+| serde         | 1.0          | 序列化/反序列化支持                  |
+| serde_json    | 1.0          | JSON格式数据持久化                   |
 
 ## 📋 环境要求
 
@@ -425,70 +425,70 @@ rfe <command> [arguments]
 
 ### 完整命令列表
 
-| 命令                                          | 说明                          | 示例                                                        |
-| ------------------------------------------- | --------------------------- | --------------------------------------------------------- |
-| `ls`                                        | 列出当前目录内容                    | `rfe ls`                                                  |
-| `ls -l`                                     | 列出目录详细信息（包含大小、创建时间、修改时间）    | `rfe ls -l`                                               |
-| `ls -a`                                     | 列出所有文件，包含隐藏文件               | `rfe ls -a`                                               |
-| `ls -la`                                    | 列出所有文件的详细信息                 | `rfe ls -la`                                              |
-| `ls <path>`                                 | 列出指定目录的内容                   | `rfe ls ~/Documents`                                      |
-| `ls --re <pattern>`                         | 使用正则表达式全局搜索文件/目录            | `rfe ls --re \.rs$`（搜索所有.rs文件）                            |
-| `ls --re --re-insensitive <pattern>`        | 大小写不敏感的正则搜索                 | `rfe ls --re --re-insensitive cargo`（搜索包含cargo的文件，不区分大小写） |
-| `pwd`                                       | 打印当前工作目录路径                  | `rfe pwd`                                                 |
-| `cppwd`                                     | 复制当前目录路径到剪贴板                | `rfe cppwd`                                               |
-| `cpf <file>`                                | 复制指定文件的绝对路径到剪贴板             | `rfe cpf README.md`                                       |
-| `cd` / `cd ~`                               | 切换到用户主目录                    | `rfe cd`                                                  |
-| `cd ..`                                     | 切换到上级目录                     | `rfe cd ..`                                               |
-| `cd <path>`                                 | 切换到指定目录                     | `rfe cd /usr/local/bin`                                   |
-| `cd -b` / `cd -back`                        | 快速返回上一个工作目录                 | `rfe cd -b`、`rfe cd -back`                                |
-| `open <path>`                               | 使用系统默认应用打开文件 / 在资源管理器中打开文件夹 | `rfe open document.pdf` / `rfe open ~/Documents`          |
-| `mv <source> <dest>`                        | 移动文件/目录到目标位置                | `rfe mv file.txt ~/Documents/`                            |
-| `mv <source> <dest> --cp`                   | 复制文件/目录到目标位置（保留原文件）         | `rfe mv photo.jpg ~/Pictures/ --cp`                       |
-| `clear` / `cls`                             | 清空终端屏幕                      | `rfe clear`                                               |
-| `help` / `?`                                | 显示帮助信息                      | `rfe help`                                                |
-| `alias add <name> <path>`                   | 添加路径别名                      | `rfe alias add docs ~/Documents`                          |
-| `alias remove <name>`                       | 删除路径别名                      | `rfe alias remove docs`                                   |
-| `alias list`                                | 查看所有路径别名                    | `rfe alias list`                                          |
-| `@<alias>`                                  | 使用路径别名，可用于所有需要路径的命令         | `rfe ls @docs`, `rfe cd @docs/rust`                       |
-| `tag add <file> <tag1> [tag2...]`           | 为文件/文件夹添加标签                 | `rfe tag add src/main.rs rust code`                       |
-| `tag remove <file> <tag1> [tag2...]`        | 删除文件的指定标签                   | `rfe tag remove src/main.rs old`                          |
-| `tag clear <file>`                          | 删除文件的所有标签                   | `rfe tag clear src/main.rs`                               |
-| `tag get <file>`                            | 查看文件的所有标签                   | `rfe tag get src/main.rs`                                 |
-| `tag list`                                  | 查看所有带标签的文件                  | `rfe tag list`                                            |
-| `tag find <tag-pattern1> [tag-pattern2...]` | 全局搜索匹配标签的文件，支持正则            | `rfe tag find rust code`                                  |
-| `tag backup`                                | 备份标签数据                      | `rfe tag backup`                                          |
-| `tag restore`                               | 从备份恢复标签数据                   | `rfe tag restore`                                         |
-| `ls -tag` / `--tags`                        | 列出文件时同时显示标签                 | `rfe ls -tag`, `rfe ls -ltag`                             |
-| `ls -t/--tag <tag-pattern>`                 | 列出当前目录下匹配指定标签的文件，可多次指定      | `rfe ls -t rust`, `rfe ls -lt rust`                       |
-| `->`                                        | 命令链式执行，前一命令输出传递给后一命令        | `rfe pwd -> ls -> cd ..`                                  |
-| `->!`                                       | 容错命令链，前一命令失败也继续执行           | `rfe cd nonexist ->! ls`                                  |
-| `{}`                                        | 命令链中的占位符，插入前一命令的输出          | `rfe cppwd -> alias add desktop {}`                       |
-| `exit` / `quit` / `q`                       | 退出交互式模式                     | `exit`                                                    |
-| `mkdf -f <path>`                            | 创建文件，自动创建父目录                | `mkdf -f test.txt`、`mkdf -f path/to/file.txt`             |
-| `mkdf -d <path>`                            | 创建文件夹                       | `mkdf -d test_folder`                                     |
-| `mkdf -d -p <path>`                         | 创建文件夹和父目录                   | `mkdf -d -p parent/child/grandchild`                      |
-| `mkdf -h` / `--help`                        | 查看mkdf命令帮助                  | `mkdf --help`                                             |
-| `ls --re <pattern>`                         | 使用正则表达式搜索文件/目录              | `rfe ls --re \.rs$`                                       |
-| `ls --re-deep <pattern>`                    | 递归使用正则表达式搜索                 | `rfe ls --re-deep \.rs$`                                  |
-| `ls --re --xcaps <pattern>`                 | 大小写不敏感的正则搜索                 | `rfe ls --re --xcaps \.RS$`                               |
-| `ls --re-deep --xcaps <pattern>`            | 递归大小写不敏感的正则搜索               | `rfe ls --re-deep --xcaps \.RS$`                          |
-| `ESC`                                       | 在 REPL 模式下按ESC键，清空当前输入内容    | 输入命令过程中按ESC快速清空                                           |
-| `-moe` / `--moe`                            | 启用 Moe Moe 萌系模式，粉色系配色+颜文字表情 | `rfe -moe`、`rfe -moe ls`、`rfe -moe pwd`                   |
+| 命令                                        | 说明                                                | 示例                                                                      |
+| ------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------- |
+| `ls`                                        | 列出当前目录内容                                    | `rfe ls`                                                                  |
+| `ls -l`                                     | 列出目录详细信息（包含大小、创建时间、修改时间）    | `rfe ls -l`                                                               |
+| `ls -a`                                     | 列出所有文件，包含隐藏文件                          | `rfe ls -a`                                                               |
+| `ls -la`                                    | 列出所有文件的详细信息                              | `rfe ls -la`                                                              |
+| `ls <path>`                                 | 列出指定目录的内容                                  | `rfe ls ~/Documents`                                                      |
+| `ls --re <pattern>`                         | 使用正则表达式全局搜索文件/目录                     | `rfe ls --re \.rs$`（搜索所有.rs文件）                                    |
+| `ls --re --re-insensitive <pattern>`        | 大小写不敏感的正则搜索                              | `rfe ls --re --re-insensitive cargo`（搜索包含cargo的文件，不区分大小写） |
+| `pwd`                                       | 打印当前工作目录路径                                | `rfe pwd`                                                                 |
+| `cppwd`                                     | 复制当前目录路径到剪贴板                            | `rfe cppwd`                                                               |
+| `cpf <file>`                                | 复制指定文件的绝对路径到剪贴板                      | `rfe cpf README.md`                                                       |
+| `cd` / `cd ~`                               | 切换到用户主目录                                    | `rfe cd`                                                                  |
+| `cd ..`                                     | 切换到上级目录                                      | `rfe cd ..`                                                               |
+| `cd <path>`                                 | 切换到指定目录                                      | `rfe cd /usr/local/bin`                                                   |
+| `cd -b` / `cd -back`                        | 快速返回上一个工作目录                              | `rfe cd -b`、`rfe cd -back`                                               |
+| `open <path>`                               | 使用系统默认应用打开文件 / 在资源管理器中打开文件夹 | `rfe open document.pdf` / `rfe open ~/Documents`                          |
+| `mv <source> <dest>`                        | 移动文件/目录到目标位置                             | `rfe mv file.txt ~/Documents/`                                            |
+| `mv <source> <dest> --cp`                   | 复制文件/目录到目标位置（保留原文件）               | `rfe mv photo.jpg ~/Pictures/ --cp`                                       |
+| `clear` / `cls`                             | 清空终端屏幕                                        | `rfe clear`                                                               |
+| `help` / `?`                                | 显示帮助信息                                        | `rfe help`                                                                |
+| `alias add <name> <path>`                   | 添加路径别名                                        | `rfe alias add docs ~/Documents`                                          |
+| `alias remove <name>`                       | 删除路径别名                                        | `rfe alias remove docs`                                                   |
+| `alias list`                                | 查看所有路径别名                                    | `rfe alias list`                                                          |
+| `@<alias>`                                  | 使用路径别名，可用于所有需要路径的命令              | `rfe ls @docs`, `rfe cd @docs/rust`                                       |
+| `tag add <file> <tag1> [tag2...]`           | 为文件/文件夹添加标签                               | `rfe tag add src/main.rs rust code`                                       |
+| `tag remove <file> <tag1> [tag2...]`        | 删除文件的指定标签                                  | `rfe tag remove src/main.rs old`                                          |
+| `tag clear <file>`                          | 删除文件的所有标签                                  | `rfe tag clear src/main.rs`                                               |
+| `tag get <file>`                            | 查看文件的所有标签                                  | `rfe tag get src/main.rs`                                                 |
+| `tag list`                                  | 查看所有带标签的文件                                | `rfe tag list`                                                            |
+| `tag find <tag-pattern1> [tag-pattern2...]` | 全局搜索匹配标签的文件，支持正则                    | `rfe tag find rust code`                                                  |
+| `tag backup`                                | 备份标签数据                                        | `rfe tag backup`                                                          |
+| `tag restore`                               | 从备份恢复标签数据                                  | `rfe tag restore`                                                         |
+| `ls -tag` / `--tags`                        | 列出文件时同时显示标签                              | `rfe ls -tag`, `rfe ls -ltag`                                             |
+| `ls -t/--tag <tag-pattern>`                 | 列出当前目录下匹配指定标签的文件，可多次指定        | `rfe ls -t rust`, `rfe ls -lt rust`                                       |
+| `->`                                        | 命令链式执行，前一命令输出传递给后一命令            | `rfe pwd -> ls -> cd ..`                                                  |
+| `->!`                                       | 容错命令链，前一命令失败也继续执行                  | `rfe cd nonexist ->! ls`                                                  |
+| `{}`                                        | 命令链中的占位符，插入前一命令的输出                | `rfe cppwd -> alias add desktop {}`                                       |
+| `exit` / `quit` / `q`                       | 退出交互式模式                                      | `exit`                                                                    |
+| `mkdf -f <path>`                            | 创建文件，自动创建父目录                            | `mkdf -f test.txt`、`mkdf -f path/to/file.txt`                            |
+| `mkdf -d <path>`                            | 创建文件夹                                          | `mkdf -d test_folder`                                                     |
+| `mkdf -d -p <path>`                         | 创建文件夹和父目录                                  | `mkdf -d -p parent/child/grandchild`                                      |
+| `mkdf -h` / `--help`                        | 查看mkdf命令帮助                                    | `mkdf --help`                                                             |
+| `ls --re <pattern>`                         | 使用正则表达式搜索文件/目录                         | `rfe ls --re \.rs$`                                                       |
+| `ls --re-deep <pattern>`                    | 递归使用正则表达式搜索                              | `rfe ls --re-deep \.rs$`                                                  |
+| `ls --re --xcaps <pattern>`                 | 大小写不敏感的正则搜索                              | `rfe ls --re --xcaps \.RS$`                                               |
+| `ls --re-deep --xcaps <pattern>`            | 递归大小写不敏感的正则搜索                          | `rfe ls --re-deep --xcaps \.RS$`                                          |
+| `ESC`                                       | 在 REPL 模式下按ESC键，清空当前输入内容             | 输入命令过程中按ESC快速清空                                               |
+| `-moe` / `--moe`                            | 启用 Moe Moe 萌系模式，粉色系配色+颜文字表情        | `rfe -moe`、`rfe -moe ls`、`rfe -moe pwd`                                 |
 
 ### 📝 常用正则表达式语法参考
 
-| 语法       | 功能说明            | 示例                                             |
-| -------- | --------------- | ---------------------------------------------- |
-| `.`      | 匹配任意单个字符        | `ls --re fi.e` → 匹配 file、fine 等                |
-| `*`      | 匹配前一个字符0次或多次    | `ls --re a*` → 匹配 a、aa、aaa 等                   |
-| `+`      | 匹配前一个字符1次或多次    | `ls --re a+` → 匹配 a、aa、aaa 等                   |
-| `?`      | 匹配前一个字符0次或1次    | `ls --re colou?r` → 匹配 color、colour            |
-| `^`      | 匹配字符串开头         | `ls --re ^src` → 匹配 src 开头的文件                  |
-| `$`      | 匹配字符串结尾         | `ls --re \.rs$` → 匹配所有 .rs 文件                  |
-| `[abc]`  | 匹配字符集中任意一个字符    | `ls --re [Ff]ile` → 匹配 File、file               |
-| `[^abc]` | 匹配不在字符集中的任意字符   | `ls --re [^Ff]ile` → 匹配 aile、bile等             |
-| `\|`     | 或逻辑，匹配左右任意一个表达式 | `ls --re \.rs$\|\.toml$` → 匹配 rs和toml文件        |
-| `()`     | 分组，用于组合表达式      | `ls --re (src\|target)\/` → 匹配src或target目录下的文件 |
+| 语法     | 功能说明                       | 示例                                                    |
+| -------- | ------------------------------ | ------------------------------------------------------- |
+| `.`      | 匹配任意单个字符               | `ls --re fi.e` → 匹配 file、fine 等                     |
+| `*`      | 匹配前一个字符0次或多次        | `ls --re a*` → 匹配 a、aa、aaa 等                       |
+| `+`      | 匹配前一个字符1次或多次        | `ls --re a+` → 匹配 a、aa、aaa 等                       |
+| `?`      | 匹配前一个字符0次或1次         | `ls --re colou?r` → 匹配 color、colour                  |
+| `^`      | 匹配字符串开头                 | `ls --re ^src` → 匹配 src 开头的文件                    |
+| `$`      | 匹配字符串结尾                 | `ls --re \.rs$` → 匹配所有 .rs 文件                     |
+| `[abc]`  | 匹配字符集中任意一个字符       | `ls --re [Ff]ile` → 匹配 File、file                     |
+| `[^abc]` | 匹配不在字符集中的任意字符     | `ls --re [^Ff]ile` → 匹配 aile、bile等                  |
+| `\|`     | 或逻辑，匹配左右任意一个表达式 | `ls --re \.rs$\|\.toml$` → 匹配 rs和toml文件            |
+| `()`     | 分组，用于组合表达式           | `ls --re (src\|target)\/` → 匹配src或target目录下的文件 |
 
 > 💡 正则模式默认会递归搜索当前目录及所有子目录，匹配的文件会显示为相对当前工作目录的路径，格式与普通ls命令保持一致。
 
@@ -516,7 +516,7 @@ rfe <command> [arguments]
   - Linux/macOS: `~/.config/rfe/tags.json`、`~/.config/rfe/tags.json.bak`
 - `ls -tag`参数可以在列出文件时同时显示其关联的标签，方便查看
 
-***
+---
 
 ## 💡 使用技巧
 
@@ -531,16 +531,19 @@ rfe <command> [arguments]
 #### 使用步骤
 
 1. 在目标文件夹内创建 `.index` 文件：
+
    ```bash
    mkdf -f /path/to/folder/.index
    ```
 
 2. 为 `.index` 文件添加标签：
+
    ```bash
    tag add /path/to/folder/.index work project important
    ```
 
 3. 搜索包含该标签的文件夹：
+
    ```bash
    tag find work project
    ```
@@ -552,10 +555,10 @@ rfe <command> [arguments]
 
 #### 优势
 
-- **语义清晰：`.index` 文件作为文件夹的索引标记
-- **跨平台兼容：隐藏文件在 Windows/Linux/macOS 都支持
-- **易于管理：可以随时修改或删除 `.index` 文件来管理文件夹的标签
-- **与现有功能兼容：无需修改代码，直接使用现有的标签系统
+- **语义清晰**：`.index` 文件作为文件夹的索引标记
+- **跨平台兼容**：隐藏文件在 Windows/Linux/macOS 都支持
+- **易于管理**：可以随时修改或删除 `.index` 文件来管理文件夹的标签
+- **与现有功能兼容**：无需修改代码，直接使用现有的标签系统
 
 ## 🤝 贡献指南
 
@@ -586,6 +589,6 @@ rfe <command> [arguments]
 - 问题反馈：请提交 [Gitee Issue](https://gitee.com/glacier-bot/rust-file-explorer/issues)
 - 邮箱：<1098644849@qq.com>
 
-***
+---
 
 ⭐ 如果这个项目对你有帮助，欢迎点个 Star 支持一下！

@@ -78,19 +78,54 @@ pub fn truncate_string(s: &str, max_width: usize) -> String {
         return "...".to_string();
     }
 
-    let mut result = String::new();
+    let (name_part, ext_part) = split_filename(s);
+    let ext_width = ext_part.width();
+
+    if ext_width >= available_width {
+        let mut result = String::new();
+        let mut current_width = 0;
+
+        for c in s.chars() {
+            let c_width = c.width().unwrap_or(1);
+            if current_width + c_width > available_width {
+                break;
+            }
+            result.push(c);
+            current_width += c_width;
+        }
+        return result + "...";
+    }
+
+    let name_available_width = available_width.saturating_sub(ext_width);
+    if name_available_width == 0 {
+        return "...".to_string() + ext_part;
+    }
+
+    let mut truncated_name = String::new();
     let mut current_width = 0;
 
-    for c in s.chars() {
+    for c in name_part.chars() {
         let c_width = c.width().unwrap_or(1);
-        if current_width + c_width > available_width {
+        if current_width + c_width > name_available_width {
             break;
         }
-        result.push(c);
+        truncated_name.push(c);
         current_width += c_width;
     }
 
-    result + "..."
+    truncated_name + "..." + ext_part
+}
+
+fn split_filename(s: &str) -> (&str, &str) {
+    if let Some(last_dot) = s.rfind('.') {
+        if last_dot == 0 {
+            return (s, "");
+        }
+        let (name, ext) = s.split_at(last_dot);
+        (name, ext)
+    } else {
+        (s, "")
+    }
 }
 
 pub fn center_text(text: &str, width: usize) -> String {
@@ -109,5 +144,60 @@ pub fn pad_to_width(s: &str, width: usize) -> String {
         s.to_string()
     } else {
         format!("{}{}", s, " ".repeat(width - s_width))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_split_filename() {
+        assert_eq!(split_filename("file.txt"), ("file", ".txt"));
+        assert_eq!(split_filename("document.pdf"), ("document", ".pdf"));
+        assert_eq!(split_filename("long_file_name_with_many_dots.tar.gz"), ("long_file_name_with_many_dots.tar", ".gz"));
+        assert_eq!(split_filename("no_extension"), ("no_extension", ""));
+        assert_eq!(split_filename(".hiddenfile"), (".hiddenfile", ""));
+        assert_eq!(split_filename(""), ("", ""));
+        assert_eq!(split_filename("a"), ("a", ""));
+        assert_eq!(split_filename(".a"), (".a", ""));
+        assert_eq!(split_filename("a."), ("a", "."));
+    }
+
+    #[test]
+    fn test_truncate_string_no_extension() {
+        assert_eq!(truncate_string("short", 10), "short");
+        assert_eq!(truncate_string("this is a very long string", 10), "this is...");
+        assert_eq!(truncate_string("abcdefghijklmnop", 8), "abcde...");
+    }
+
+    #[test]
+    fn test_truncate_string_with_extension() {
+        assert_eq!(truncate_string("very_long_file_name_that_needs_truncating.docx", 20), "very_long_fi....docx");
+        assert_eq!(truncate_string("document.pdf", 10), "doc....pdf");
+        assert_eq!(truncate_string("a_very_long_filename_that_needs_to_be_truncated.rs", 30), "a_very_long_filename_tha....rs");
+    }
+
+    #[test]
+    fn test_truncate_string_extension_too_long() {
+        assert_eq!(truncate_string("file.verylongextension", 15), "file.verylon...");
+        assert_eq!(truncate_string("file.ext", 3), "...");
+    }
+
+    #[test]
+    fn test_truncate_string_exact_length() {
+        assert_eq!(truncate_string("exact", 5), "exact");
+        assert_eq!(truncate_string("exact.txt", 9), "exact.txt");
+    }
+
+    #[test]
+    fn test_truncate_string_just_over() {
+        assert_eq!(truncate_string("just_over", 8), "just_...");
+        assert_eq!(truncate_string("just_over.txt", 12), "just_....txt");
+    }
+
+    #[test]
+    fn test_truncate_string_unicode() {
+        assert_eq!(truncate_string("文件名称很长.txt", 12), "文件....txt");
     }
 }
