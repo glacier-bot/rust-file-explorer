@@ -20,157 +20,8 @@ use crate::managers::{alias::AliasManager, tag::TagManager};
 use rustyline::completion::FilenameCompleter;
 
 fn print_welcome() {
-    if is_moe() {
-        println!(
-            "{}",
-            "╔══════════════════════════════════════════════════════════════╗"
-                .truecolor(255, 105, 180)
-        );
-        println!(
-            "{}{}{}",
-            "║ ".truecolor(255, 105, 180),
-            "        🌸✨ Rust File Explorer v0.5.0 ✨🌸                 ".truecolor(255, 182, 193),
-            " ║".truecolor(255, 105, 180)
-        );
-        println!(
-            "{}{}{}",
-            "║ ".truecolor(255, 105, 180),
-            "     ciallo∠・ω⌒☆ Welcome to the moe moe mode！💕           ".truecolor(255, 182, 193),
-            " ║".truecolor(255, 105, 180)
-        );
-        println!(
-            "{}{}{}",
-            "║ ".truecolor(255, 105, 180),
-            "         A cross-platform CLI file browser 💕               ".truecolor(255, 182, 193),
-            " ║".truecolor(255, 105, 180)
-        );
-        println!(
-            "{}",
-            "╚══════════════════════════════════════════════════════════════╝"
-                .truecolor(255, 105, 180)
-        );
-        println!();
-        println!("{} 💕", "💖 Commands:".truecolor(255, 160, 122));
-        println!(
-            "  {}  - List directory contents (supports --re regex search, -t tag filter) ✨",
-            "ls".truecolor(255, 182, 193)
-        );
-        println!(
-            "  {}  - Print working directory 💫",
-            "pwd".truecolor(255, 182, 193)
-        );
-        println!(
-            "  {}  - Copy current directory path to clipboard 💖",
-            "cppwd".truecolor(255, 182, 193)
-        );
-        println!(
-            "  {}  - Copy file absolute path to clipboard 💗",
-            "cpf <file>".truecolor(255, 182, 193)
-        );
-        println!(
-            "  {}  - Change directory (use cd -b/-back to go back) 🌸\n",
-            "cd <path>".truecolor(255, 182, 193)
-        );
-        println!(
-            "  {}  - Open file with default application / Open directory in file explorer 📂",
-            "open <path>".truecolor(255, 182, 193)
-        );
-        println!(
-            "  {}  - Move/copy file or folder (use --cp to copy) 💫",
-            "mv <source> <dest> [--cp]".truecolor(255, 182, 193)
-        );
-        println!(
-            "  {}  - Create file or directory (-f for file, -d for directory) ✨",
-            "mkdf".truecolor(255, 182, 193)
-        );
-        println!(
-            "  {}  - Manage path aliases (add/remove/list) 💖",
-            "alias".truecolor(255, 182, 193)
-        );
-        println!(
-            "  {}  - Manage file tags (add/remove/find/list/backup) 💕",
-            "tag".truecolor(255, 182, 193)
-        );
-        println!(
-            "  {}  - Exit the program 👋",
-            "exit".truecolor(255, 182, 193)
-        );
-        println!(
-            "  {} - Clear the screen ✨",
-            "clear".truecolor(255, 182, 193)
-        );
-        println!("  {}  - Show this help 💖", "help".truecolor(255, 182, 193));
-        println!();
-        println!("{} 💕", "💖 Keyboard shortcuts:".truecolor(255, 160, 122));
-        println!(
-            "  {} - Clear current input line in REPL mode ✨",
-            "ESC".truecolor(255, 182, 193)
-        );
-        println!();
-    } else {
-        println!(
-            "{}",
-            "╔══════════════════════════════════════════════════════════════╗".bright_green()
-        );
-        println!(
-            "{}",
-            "║           Rust File Explorer v0.5.0                          ║".bright_green()
-        );
-        println!(
-            "{}",
-            "║           A cross-platform CLI file browser                  ║".bright_green()
-        );
-        println!(
-            "{}",
-            "╚══════════════════════════════════════════════════════════════╝".bright_green()
-        );
-        println!();
-        println!("{}", "Commands:".bright_yellow());
-        println!(
-            "  {}  - List directory contents (supports --re regex search, -t tag filter)",
-            "ls".cyan()
-        );
-        println!("  {}  - Print working directory", "pwd".cyan());
-        println!(
-            "  {}  - Copy current directory path to clipboard",
-            "cppwd".cyan()
-        );
-        println!(
-            "  {}  - Copy file absolute path to clipboard",
-            "cpf <file>".cyan()
-        );
-        println!(
-            "  {}  - Change directory (use cd -b/-back to go back)\n",
-            "cd <path>".cyan()
-        );
-        println!(
-            "  {}  - Open file with default application / Open directory in file explorer",
-            "open <path>".cyan()
-        );
-        println!(
-            "  {}  - Move/copy file or folder (use --cp to copy)",
-            "mv <source> <dest> [--cp]".cyan()
-        );
-        println!(
-            "  {}  - Create file or directory (-f for file, -d for directory)",
-            "mkdf".cyan()
-        );
-        println!(
-            "  {}  - Manage path aliases (add/remove/list)",
-            "alias".cyan()
-        );
-        println!(
-            "  {}  - Manage file tags (add/remove/find/list/backup)",
-            "tag".cyan()
-        );
-        println!("  {}  - Exit the program", "exit".cyan());
-        println!("  {} - Clear the screen", "clear".cyan());
-        println!("  {}  - Show this help", "help".cyan());
-        println!();
-        println!("{}", "Keyboard shortcuts:".bright_yellow());
-        println!("  {} - Clear current input line in REPL mode", "ESC".cyan());
-        println!();
-    }
+    let (display, _) = welcome::cmd_welcome().unwrap_or_default();
+    println!("{}", display);
 }
 
 fn get_prompt_string() -> String {
@@ -372,6 +223,10 @@ fn execute_single_command(
         }
         "help" | "?" => {
             let (display, raw) = help::cmd_help()?;
+            Ok((false, display, raw, None))
+        }
+        "welcome" => {
+            let (display, raw) = welcome::cmd_welcome()?;
             Ok((false, display, raw, None))
         }
         "mkdf" => {
@@ -710,6 +565,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         "clear" => clear::cmd_clear(),
         "help" => help::cmd_help(),
+        "welcome" => welcome::cmd_welcome(),
         "mkdf" => {
             let mkdf_args: Vec<&str> = args[arg_offset + 1..].iter().map(|s| s.as_str()).collect();
             mkdf::cmd_mkdf(&mkdf_args)

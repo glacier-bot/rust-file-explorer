@@ -21,6 +21,7 @@
 - 🆕 **ESC 键清空输入**：在 REPL 模式下，按 ESC 键可快速清空当前输入内容，提高操作效率
 - 🔙 **目录快速返回**：使用 `cd -b` 或 `cd -back` 快速返回上一个工作目录，无需记住路径
 - 🌸 **Moe Moe 模式**：使用 `-moe` 或 `--moe` 参数启动，欢迎界面和所有输出增加可爱颜文字表情，配色统一为粉色系，更适合二次元宝宝体质
+- 🎉 **Welcome 命令**：随时输入 `welcome` 命令重新显示欢迎页面，支持标准模式和 Moe Moe 模式自适应
 
 ## 🔑 核心概念与进阶特性
 
@@ -468,6 +469,7 @@ rfe <command> [arguments]
 | `mkdf -d <path>`                            | 创建文件夹                                          | `mkdf -d test_folder`                                                     |
 | `mkdf -d -p <path>`                         | 创建文件夹和父目录                                  | `mkdf -d -p parent/child/grandchild`                                      |
 | `mkdf -h` / `--help`                        | 查看mkdf命令帮助                                    | `mkdf --help`                                                             |
+| `welcome`                                   | 显示欢迎页面（自动适配当前模式）                    | `rfe welcome`、`welcome`                                                  |
 | `ls --re <pattern>`                         | 使用正则表达式搜索文件/目录                         | `rfe ls --re \.rs$`                                                       |
 | `ls --re-deep <pattern>`                    | 递归使用正则表达式搜索                              | `rfe ls --re-deep \.rs$`                                                  |
 | `ls --re --xcaps <pattern>`                 | 大小写不敏感的正则搜索                              | `rfe ls --re --xcaps \.RS$`                                               |
