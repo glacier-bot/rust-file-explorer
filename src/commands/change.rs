@@ -9,7 +9,6 @@ pub fn cmd_change(args: &[&str]) -> Result<(String, String), Box<dyn std::error:
     match args[0] {
         "-std" | "--std" => {
             if !is_moe() {
-                // 已经是标准模式
                 let output = if is_moe() {
                     "Already in standard mode 💕".to_string()
                 } else {
@@ -17,7 +16,6 @@ pub fn cmd_change(args: &[&str]) -> Result<(String, String), Box<dyn std::error:
                 };
                 return Ok((output, String::new()));
             }
-            // 切换到标准模式
             disable_moe();
             let output = if is_moe() {
                 "Failed to switch to standard mode 😢💔".to_string()
@@ -28,7 +26,6 @@ pub fn cmd_change(args: &[&str]) -> Result<(String, String), Box<dyn std::error:
         }
         "-moe" | "--moe" => {
             if is_moe() {
-                // 已经是 Moe 模式
                 let output = if is_moe() {
                     format!(
                         "{} {} Already in moe moe mode! 💕✨🌸",
@@ -40,7 +37,6 @@ pub fn cmd_change(args: &[&str]) -> Result<(String, String), Box<dyn std::error:
                 };
                 return Ok((output, String::new()));
             }
-            // 切换到 Moe 模式
             enable_moe();
             let output = if is_moe() {
                 format!(

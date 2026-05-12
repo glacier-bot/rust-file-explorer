@@ -50,23 +50,28 @@ fn execute_single_command(
     alias_manager: &Arc<Mutex<AliasManager>>,
     tag_manager: &Arc<Mutex<TagManager>>,
     previous_dir: Option<&str>,
-) -> Result<(CommandResult, String, Option<String>), Box<dyn std::error::Error>> {
+) -> Result<(CommandResult, String, String, Option<String>), Box<dyn std::error::Error>> {
     let parts: Vec<String> = split_command_args(input);
 
     if parts.is_empty() {
-        return Ok((CommandResult::Normal(false), String::new(), None));
+        return Ok((
+            CommandResult::Normal(false),
+            String::new(),
+            String::new(),
+            None,
+        ));
     }
 
     let cmd = parts[0].to_lowercase();
 
     match cmd.as_str() {
         "pwd" => {
-            let (display, _raw) = pwd::cmd_pwd()?;
-            Ok((CommandResult::Normal(false), display, None))
+            let (display, raw) = pwd::cmd_pwd()?;
+            Ok((CommandResult::Normal(false), display, raw, None))
         }
         "cppwd" => {
-            let (display, _raw) = clipboard::cmd_cppwd()?;
-            Ok((CommandResult::Normal(false), display, None))
+            let (display, raw) = clipboard::cmd_cppwd()?;
+            Ok((CommandResult::Normal(false), display, raw, None))
         }
         "cpf" => {
             let path = if let Some(p) = parts.get(1) {
@@ -77,8 +82,8 @@ fn execute_single_command(
                 return Err("Usage: cpf <file>".into());
             };
             let resolved_path = alias_manager.lock().unwrap().resolve_path(&path);
-            let (display, _raw) = clipboard::cmd_cpf(&resolved_path)?;
-            Ok((CommandResult::Normal(false), display, None))
+            let (display, raw) = clipboard::cmd_cpf(&resolved_path)?;
+            Ok((CommandResult::Normal(false), display, raw, None))
         }
         "cd" => {
             let mut is_idx = false;
@@ -118,12 +123,15 @@ fn execute_single_command(
                     Some(&tag_manager.lock().unwrap()),
                     selection,
                 )? {
-                    cd::CdResult::Success(display, _raw, new_prev) => {
-                        Ok((CommandResult::Normal(false), display, new_prev))
+                    cd::CdResult::Success(display, raw, new_prev) => {
+                        Ok((CommandResult::Normal(false), display, raw, new_prev))
                     }
-                    cd::CdResult::NeedSelection(items) => {
-                        Ok((CommandResult::NeedCdSelection(items), String::new(), None))
-                    }
+                    cd::CdResult::NeedSelection(items) => Ok((
+                        CommandResult::NeedCdSelection(items),
+                        String::new(),
+                        String::new(),
+                        None,
+                    )),
                 }
             } else {
                 let path = if path.is_some() {
@@ -134,8 +142,8 @@ fn execute_single_command(
                     None
                 };
                 match cd::cmd_cd(path.as_deref(), previous_dir, false, None, None, None)? {
-                    cd::CdResult::Success(display, _raw, new_prev) => {
-                        Ok((CommandResult::Normal(false), display, new_prev))
+                    cd::CdResult::Success(display, raw, new_prev) => {
+                        Ok((CommandResult::Normal(false), display, raw, new_prev))
                     }
                     cd::CdResult::NeedSelection(_) => Err("Unexpected error".into()),
                 }
@@ -180,7 +188,8 @@ fn execute_single_command(
                             }
                         } else {
                             return Err(
-                                "标签查询参数需要指定匹配模式，用法：ls -t <标签正则>".into()
+                                "Tag query parameter requires a pattern, usage: ls -t <tag_regex>"
+                                    .into(),
                             );
                         }
                     }
@@ -193,11 +202,11 @@ fn execute_single_command(
             for pattern_str in tag_pattern_strs {
                 match regex::Regex::new(&pattern_str) {
                     Ok(re) => tag_patterns.push(re),
-                    Err(e) => return Err(format!("标签正则表达式无效: {}", e).into()),
+                    Err(e) => return Err(format!("Invalid tag regex: {}", e).into()),
                 }
             }
 
-            let (display, _raw) = ls::cmd_ls(
+            let (display, raw) = ls::cmd_ls(
                 all,
                 long,
                 re,
@@ -208,7 +217,7 @@ fn execute_single_command(
                 &tag_manager.lock().unwrap(),
                 &tag_patterns,
             )?;
-            Ok((CommandResult::Normal(false), display, None))
+            Ok((CommandResult::Normal(false), display, raw, None))
         }
         "open" => {
             let path = if let Some(p) = parts.get(1) {
@@ -219,8 +228,8 @@ fn execute_single_command(
                 return Err("Usage: open <file>".into());
             };
             let resolved_path = alias_manager.lock().unwrap().resolve_path(&path);
-            let (display, _raw) = open::cmd_open(&resolved_path)?;
-            Ok((CommandResult::Normal(false), display, None))
+            let (display, raw) = open::cmd_open(&resolved_path)?;
+            Ok((CommandResult::Normal(false), display, raw, None))
         }
         "mv" => {
             let mut source: Option<String> = None;
@@ -241,19 +250,18 @@ fn execute_single_command(
             let destination =
                 destination.ok_or("Usage: mv <source_path> <destination_path> [--cp]")?;
 
-            let (display, _raw) = mv::cmd_mv(&source, &destination, copy)?;
-            Ok((CommandResult::Normal(false), display, None))
+            let (display, raw) = mv::cmd_mv(&source, &destination, copy)?;
+            Ok((CommandResult::Normal(false), display, raw, None))
         }
         "alias" => {
             let alias_args: Vec<&str> = parts[1..].iter().map(|s| s.as_str()).collect();
-            let (display, _raw) =
-                alias::cmd_alias(&mut alias_manager.lock().unwrap(), &alias_args)?;
-            Ok((CommandResult::Normal(false), display, None))
+            let (display, raw) = alias::cmd_alias(&mut alias_manager.lock().unwrap(), &alias_args)?;
+            Ok((CommandResult::Normal(false), display, raw, None))
         }
         "tag" | "t" => {
             let tag_args: Vec<&str> = parts[1..].iter().map(|s| s.as_str()).collect();
-            let (display, _raw) = tag::cmd_tag(&mut tag_manager.lock().unwrap(), &tag_args)?;
-            Ok((CommandResult::Normal(false), display, None))
+            let (display, raw) = tag::cmd_tag(&mut tag_manager.lock().unwrap(), &tag_args)?;
+            Ok((CommandResult::Normal(false), display, raw, None))
         }
         "exit" | "quit" | "q" => {
             if is_moe() {
@@ -262,37 +270,39 @@ fn execute_single_command(
                     "👋🌸💖 Bye-bye! See you next time~ 💕"
                         .truecolor(255, 182, 193)
                         .to_string(),
+                    String::new(),
                     None,
                 ))
             } else {
                 Ok((
                     CommandResult::Normal(true),
                     "👋 Goodbye!".bright_green().to_string(),
+                    String::new(),
                     None,
                 ))
             }
         }
         "clear" | "cls" => {
-            let (display, _raw) = clear::cmd_clear()?;
-            Ok((CommandResult::Normal(false), display, None))
+            let (display, raw) = clear::cmd_clear()?;
+            Ok((CommandResult::Normal(false), display, raw, None))
         }
         "help" | "?" => {
-            let (display, _raw) = help::cmd_help()?;
-            Ok((CommandResult::Normal(false), display, None))
+            let (display, raw) = help::cmd_help()?;
+            Ok((CommandResult::Normal(false), display, raw, None))
         }
         "welcome" => {
-            let (display, _raw) = welcome::cmd_welcome()?;
-            Ok((CommandResult::Normal(false), display, None))
+            let (display, raw) = welcome::cmd_welcome()?;
+            Ok((CommandResult::Normal(false), display, raw, None))
         }
         "mkdf" => {
             let mkdf_args: Vec<&str> = parts[1..].iter().map(|s| s.as_str()).collect();
-            let (display, _raw) = mkdf::cmd_mkdf(&mkdf_args)?;
-            Ok((CommandResult::Normal(false), display, None))
+            let (display, raw) = mkdf::cmd_mkdf(&mkdf_args)?;
+            Ok((CommandResult::Normal(false), display, raw, None))
         }
         "change" => {
             let change_args: Vec<&str> = parts[1..].iter().map(|s| s.as_str()).collect();
-            let (display, _raw) = commands::change::cmd_change(&change_args)?;
-            Ok((CommandResult::Normal(false), display, None))
+            let (display, raw) = commands::change::cmd_change(&change_args)?;
+            Ok((CommandResult::Normal(false), display, raw, None))
         }
         _ => {
             if is_moe() {
@@ -302,14 +312,14 @@ fn execute_single_command(
                     "💔".truecolor(255, 105, 180),
                     cmd.truecolor(255, 182, 193)
                 );
-                Ok((CommandResult::Normal(false), display, None))
+                Ok((CommandResult::Normal(false), display, String::new(), None))
             } else {
                 let display = format!(
                     "{} Command not found: {}. Type 'help' for available commands.",
                     "❌".red(),
                     cmd.cyan()
                 );
-                Ok((CommandResult::Normal(false), display, None))
+                Ok((CommandResult::Normal(false), display, String::new(), None))
             }
         }
     }
@@ -352,7 +362,7 @@ fn execute_command(
             tag_manager,
             current_previous_dir.as_deref(),
         ) {
-            Ok((cmd_result, display_output, new_prev_dir)) => {
+            Ok((cmd_result, display_output, raw_output, new_prev_dir)) => {
                 println!("{}", display_output);
                 if let CommandResult::NeedCdSelection(_) = cmd_result {
                     return Ok(cmd_result);
@@ -360,7 +370,7 @@ fn execute_command(
                 if let CommandResult::Normal(exit) = cmd_result {
                     result = CommandResult::Normal(exit);
                 }
-                previous_raw_data = String::new();
+                previous_raw_data = raw_output;
                 if let Some(new_prev) = new_prev_dir {
                     *current_previous_dir = Some(new_prev);
                 }
@@ -436,15 +446,23 @@ fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
                     };
 
                     if selection < 1 || selection > items.len() {
-                        eprintln!("{} Selection out of range, please enter a number between 1 and {}.", "❌".red(), items.len());
+                        eprintln!(
+                            "{} Selection out of range, please enter a number between 1 and {}.",
+                            "❌".red(),
+                            items.len()
+                        );
                         continue;
                     }
 
                     let item = &items[selection - 1];
                     let target = std::path::PathBuf::from(&item.full_path);
-                    
+
                     if !target.exists() {
-                        eprintln!("{} Directory does not exist or is not accessible: {}", "❌".red(), target.display());
+                        eprintln!(
+                            "{} Directory does not exist or is not accessible: {}",
+                            "❌".red(),
+                            target.display()
+                        );
                         continue;
                     }
 
@@ -674,7 +692,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                         } else {
                             return Err(
-                                "标签查询参数需要指定匹配模式，用法：ls -t <标签正则>".into()
+                                "Tag query parameter requires a pattern, usage: ls -t <tag_regex>"
+                                    .into(),
                             );
                         }
                     }
@@ -687,7 +706,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             for pattern_str in tag_pattern_strs {
                 match regex::Regex::new(&pattern_str) {
                     Ok(re) => tag_patterns.push(re),
-                    Err(e) => return Err(format!("标签正则表达式无效: {}", e).into()),
+                    Err(e) => return Err(format!("Invalid tag regex: {}", e).into()),
                 }
             }
 
@@ -760,7 +779,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             mkdf::cmd_mkdf(&mkdf_args)
         }
         "change" => {
-            let change_args: Vec<&str> = args[arg_offset + 1..].iter().map(|s| s.as_str()).collect();
+            let change_args: Vec<&str> =
+                args[arg_offset + 1..].iter().map(|s| s.as_str()).collect();
             commands::change::cmd_change(&change_args)
         }
         _ => {

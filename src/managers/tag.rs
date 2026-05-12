@@ -152,7 +152,7 @@ impl TagManager {
     pub fn add_tags(&mut self, file_path: &str, tags: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
         let path = PathBuf::from(file_path);
         if !path.exists() {
-            return Err(format!("文件或文件夹不存在: {}", file_path).into());
+            return Err(format!("File or directory does not exist: {}", file_path).into());
         }
         
         let abs_path = Self::normalize_path(file_path)?;
