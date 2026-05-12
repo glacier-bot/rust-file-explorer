@@ -39,7 +39,9 @@ pub fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
         output.push_str(&format!("  {}         Change to parent directory ⬆️\n", "cd ..".truecolor(255, 182, 193).bold()));
         output.push_str(&format!("  {}     Change to specified directory 💫\n", "cd <path>".truecolor(255, 182, 193).bold()));
         output.push_str(&format!("  {}     Change back to previous directory 🔙\n", "cd -b/-back".truecolor(255, 182, 193).bold()));
-        output.push_str(&format!("                      (short: -b, long: -back) 💕\n\n"));
+        output.push_str(&format!("                      (short: -b, long: -back) 💕\n"));
+        output.push_str(&format!("  {}   Jump to directory with .index file matching tag 🔖\n", "cd -idx <tag>".truecolor(255, 182, 193).bold()));
+        output.push_str(&format!("                      supports regex matching 💕\n\n"));
         
         output.push_str(&format!("  {}         Open file with default application / Open directory in file explorer 📂\n", "open <path>".truecolor(255, 182, 193).bold()));
         
@@ -120,7 +122,9 @@ pub fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
         output.push_str(&format!("  {}         Change to parent directory\n", "cd ..".cyan().bold()));
         output.push_str(&format!("  {}     Change to specified directory\n", "cd <path>".cyan().bold()));
         output.push_str(&format!("  {}     Change back to previous directory\n", "cd -b/-back".cyan().bold()));
-        output.push_str(&format!("                      (short: -b, long: -back)\n\n"));
+        output.push_str(&format!("                      (short: -b, long: -back)\n"));
+        output.push_str(&format!("  {}   Jump to directory with .index file matching tag\n", "cd -idx <tag>".cyan().bold()));
+        output.push_str(&format!("                      supports regex matching\n\n"));
         
         output.push_str(&format!("  {}         Open file with default application / Open directory in file explorer\n", "open <path>".cyan().bold()));
         

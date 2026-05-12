@@ -19,6 +19,12 @@ use crate::helper::RfeHelper;
 use crate::managers::{alias::AliasManager, tag::TagManager};
 use rustyline::completion::FilenameCompleter;
 
+#[derive(Debug)]
+enum CommandResult {
+    Normal(bool),
+    NeedCdSelection(Vec<cd::CdSelectionItem>),
+}
+
 fn print_welcome() {
     let (display, _) = welcome::cmd_welcome().unwrap_or_default();
     println!("{}", display);
@@ -44,23 +50,23 @@ fn execute_single_command(
     alias_manager: &Arc<Mutex<AliasManager>>,
     tag_manager: &Arc<Mutex<TagManager>>,
     previous_dir: Option<&str>,
-) -> Result<(bool, String, String, Option<String>), Box<dyn std::error::Error>> {
+) -> Result<(CommandResult, String, Option<String>), Box<dyn std::error::Error>> {
     let parts: Vec<String> = split_command_args(input);
 
     if parts.is_empty() {
-        return Ok((false, String::new(), String::new(), None));
+        return Ok((CommandResult::Normal(false), String::new(), None));
     }
 
     let cmd = parts[0].to_lowercase();
 
     match cmd.as_str() {
         "pwd" => {
-            let (display, raw) = pwd::cmd_pwd()?;
-            Ok((false, display, raw, None))
+            let (display, _raw) = pwd::cmd_pwd()?;
+            Ok((CommandResult::Normal(false), display, None))
         }
         "cppwd" => {
-            let (display, raw) = clipboard::cmd_cppwd()?;
-            Ok((false, display, raw, None))
+            let (display, _raw) = clipboard::cmd_cppwd()?;
+            Ok((CommandResult::Normal(false), display, None))
         }
         "cpf" => {
             let path = if let Some(p) = parts.get(1) {
@@ -71,19 +77,69 @@ fn execute_single_command(
                 return Err("Usage: cpf <file>".into());
             };
             let resolved_path = alias_manager.lock().unwrap().resolve_path(&path);
-            let (display, raw) = clipboard::cmd_cpf(&resolved_path)?;
-            Ok((false, display, raw, None))
+            let (display, _raw) = clipboard::cmd_cpf(&resolved_path)?;
+            Ok((CommandResult::Normal(false), display, None))
         }
         "cd" => {
-            let path = if parts.len() > 1 {
-                Some(alias_manager.lock().unwrap().resolve_path(&parts[1]))
-            } else if !input_data.is_empty() {
-                Some(input_data.to_string())
+            let mut is_idx = false;
+            let mut idx_tag: Option<String> = None;
+            let mut path: Option<String> = None;
+            let mut selection: Option<usize> = None;
+
+            let mut i = 1;
+            while i < parts.len() {
+                match parts[i].as_str() {
+                    "-idx" => {
+                        is_idx = true;
+                        if i + 1 < parts.len() {
+                            idx_tag = Some(parts[i + 1].clone());
+                            i += 1;
+                        }
+                    }
+                    "-sel" => {
+                        if i + 1 < parts.len() {
+                            if let Ok(n) = parts[i + 1].parse::<usize>() {
+                                selection = Some(n);
+                            }
+                            i += 1;
+                        }
+                    }
+                    p => path = Some(alias_manager.lock().unwrap().resolve_path(p)),
+                }
+                i += 1;
+            }
+
+            if is_idx {
+                match cd::cmd_cd(
+                    None,
+                    previous_dir,
+                    true,
+                    idx_tag.as_deref(),
+                    Some(&tag_manager.lock().unwrap()),
+                    selection,
+                )? {
+                    cd::CdResult::Success(display, _raw, new_prev) => {
+                        Ok((CommandResult::Normal(false), display, new_prev))
+                    }
+                    cd::CdResult::NeedSelection(items) => {
+                        Ok((CommandResult::NeedCdSelection(items), String::new(), None))
+                    }
+                }
             } else {
-                None
-            };
-            let (display, raw, new_prev) = cd::cmd_cd(path.as_deref(), previous_dir)?;
-            Ok((false, display, raw, new_prev))
+                let path = if path.is_some() {
+                    path
+                } else if !input_data.is_empty() {
+                    Some(input_data.to_string())
+                } else {
+                    None
+                };
+                match cd::cmd_cd(path.as_deref(), previous_dir, false, None, None, None)? {
+                    cd::CdResult::Success(display, _raw, new_prev) => {
+                        Ok((CommandResult::Normal(false), display, new_prev))
+                    }
+                    cd::CdResult::NeedSelection(_) => Err("Unexpected error".into()),
+                }
+            }
         }
         "ls" => {
             let mut all = false;
@@ -141,7 +197,7 @@ fn execute_single_command(
                 }
             }
 
-            let (display, raw) = ls::cmd_ls(
+            let (display, _raw) = ls::cmd_ls(
                 all,
                 long,
                 re,
@@ -152,7 +208,7 @@ fn execute_single_command(
                 &tag_manager.lock().unwrap(),
                 &tag_patterns,
             )?;
-            Ok((false, display, raw, None))
+            Ok((CommandResult::Normal(false), display, None))
         }
         "open" => {
             let path = if let Some(p) = parts.get(1) {
@@ -163,8 +219,8 @@ fn execute_single_command(
                 return Err("Usage: open <file>".into());
             };
             let resolved_path = alias_manager.lock().unwrap().resolve_path(&path);
-            let (display, raw) = open::cmd_open(&resolved_path)?;
-            Ok((false, display, raw, None))
+            let (display, _raw) = open::cmd_open(&resolved_path)?;
+            Ok((CommandResult::Normal(false), display, None))
         }
         "mv" => {
             let mut source: Option<String> = None;
@@ -185,54 +241,53 @@ fn execute_single_command(
             let destination =
                 destination.ok_or("Usage: mv <source_path> <destination_path> [--cp]")?;
 
-            let (display, raw) = mv::cmd_mv(&source, &destination, copy)?;
-            Ok((false, display, raw, None))
+            let (display, _raw) = mv::cmd_mv(&source, &destination, copy)?;
+            Ok((CommandResult::Normal(false), display, None))
         }
         "alias" => {
             let alias_args: Vec<&str> = parts[1..].iter().map(|s| s.as_str()).collect();
-            let (display, raw) = alias::cmd_alias(&mut alias_manager.lock().unwrap(), &alias_args)?;
-            Ok((false, display, raw, None))
+            let (display, _raw) =
+                alias::cmd_alias(&mut alias_manager.lock().unwrap(), &alias_args)?;
+            Ok((CommandResult::Normal(false), display, None))
         }
         "tag" | "t" => {
             let tag_args: Vec<&str> = parts[1..].iter().map(|s| s.as_str()).collect();
-            let (display, raw) = tag::cmd_tag(&mut tag_manager.lock().unwrap(), &tag_args)?;
-            Ok((false, display, raw, None))
+            let (display, _raw) = tag::cmd_tag(&mut tag_manager.lock().unwrap(), &tag_args)?;
+            Ok((CommandResult::Normal(false), display, None))
         }
         "exit" | "quit" | "q" => {
             if is_moe() {
                 Ok((
-                    true,
+                    CommandResult::Normal(true),
                     "👋🌸💖 Bye-bye! See you next time~ 💕"
                         .truecolor(255, 182, 193)
                         .to_string(),
-                    String::new(),
                     None,
                 ))
             } else {
                 Ok((
-                    true,
+                    CommandResult::Normal(true),
                     "👋 Goodbye!".bright_green().to_string(),
-                    String::new(),
                     None,
                 ))
             }
         }
         "clear" | "cls" => {
-            let (display, raw) = clear::cmd_clear()?;
-            Ok((false, display, raw, None))
+            let (display, _raw) = clear::cmd_clear()?;
+            Ok((CommandResult::Normal(false), display, None))
         }
         "help" | "?" => {
-            let (display, raw) = help::cmd_help()?;
-            Ok((false, display, raw, None))
+            let (display, _raw) = help::cmd_help()?;
+            Ok((CommandResult::Normal(false), display, None))
         }
         "welcome" => {
-            let (display, raw) = welcome::cmd_welcome()?;
-            Ok((false, display, raw, None))
+            let (display, _raw) = welcome::cmd_welcome()?;
+            Ok((CommandResult::Normal(false), display, None))
         }
         "mkdf" => {
             let mkdf_args: Vec<&str> = parts[1..].iter().map(|s| s.as_str()).collect();
-            let (display, raw) = mkdf::cmd_mkdf(&mkdf_args)?;
-            Ok((false, display, raw, None))
+            let (display, _raw) = mkdf::cmd_mkdf(&mkdf_args)?;
+            Ok((CommandResult::Normal(false), display, None))
         }
         _ => {
             if is_moe() {
@@ -242,14 +297,14 @@ fn execute_single_command(
                     "💔".truecolor(255, 105, 180),
                     cmd.truecolor(255, 182, 193)
                 );
-                Ok((false, display, String::new(), None))
+                Ok((CommandResult::Normal(false), display, None))
             } else {
                 let display = format!(
                     "{} Command not found: {}. Type 'help' for available commands.",
                     "❌".red(),
                     cmd.cyan()
                 );
-                Ok((false, display, String::new(), None))
+                Ok((CommandResult::Normal(false), display, None))
             }
         }
     }
@@ -260,12 +315,12 @@ fn execute_command(
     alias_manager: &Arc<Mutex<AliasManager>>,
     tag_manager: &Arc<Mutex<TagManager>>,
     current_previous_dir: &mut Option<String>,
-) -> Result<bool, Box<dyn std::error::Error>> {
+) -> Result<CommandResult, Box<dyn std::error::Error>> {
     let input = input.replace("\n", " ");
     let command_segments: Vec<&str> = input.split("->").map(|s| s.trim()).collect();
 
     let mut previous_raw_data = String::new();
-    let mut should_exit = false;
+    let mut result = CommandResult::Normal(false);
 
     for segment in command_segments.iter() {
         if segment.is_empty() {
@@ -292,15 +347,17 @@ fn execute_command(
             tag_manager,
             current_previous_dir.as_deref(),
         ) {
-            Ok((exit, display_output, raw_data, new_prev_dir)) => {
+            Ok((cmd_result, display_output, new_prev_dir)) => {
                 println!("{}", display_output);
-                previous_raw_data = raw_data;
+                if let CommandResult::NeedCdSelection(_) = cmd_result {
+                    return Ok(cmd_result);
+                }
+                if let CommandResult::Normal(exit) = cmd_result {
+                    result = CommandResult::Normal(exit);
+                }
+                previous_raw_data = String::new();
                 if let Some(new_prev) = new_prev_dir {
                     *current_previous_dir = Some(new_prev);
-                }
-                if exit {
-                    should_exit = true;
-                    break;
                 }
             }
             Err(e) => {
@@ -323,7 +380,7 @@ fn execute_command(
         }
     }
 
-    Ok(should_exit)
+    Ok(result)
 }
 
 fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
@@ -332,6 +389,7 @@ fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
     let alias_manager = Arc::new(Mutex::new(AliasManager::new()?));
     let tag_manager = Arc::new(Mutex::new(TagManager::new()?));
     let mut previous_dir: Option<String> = None;
+    let mut pending_cd_selection: Option<(Vec<cd::CdSelectionItem>, Option<String>)> = None;
 
     let helper = RfeHelper {
         completer: FilenameCompleter::new(),
@@ -349,7 +407,12 @@ fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
     rl.set_helper(Some(helper));
 
     loop {
-        let prompt = get_prompt_string();
+        let prompt = if pending_cd_selection.is_some() {
+            format!("{} Enter selection number: ", "📍".bright_blue())
+        } else {
+            get_prompt_string()
+        };
+
         match rl.readline(&prompt) {
             Ok(input) => {
                 let input = input.trim();
@@ -358,20 +421,70 @@ fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 let _ = rl.add_history_entry(input);
 
-                match execute_command(input, &alias_manager, &tag_manager, &mut previous_dir) {
-                    Ok(should_exit) => {
-                        if should_exit {
-                            break;
+                if let Some((items, _tag)) = pending_cd_selection.take() {
+                    let selection: usize = match input.parse() {
+                        Ok(n) => n,
+                        Err(_) => {
+                            eprintln!("{} Invalid input, please enter a number.", "❌".red());
+                            continue;
                         }
+                    };
+
+                    if selection < 1 || selection > items.len() {
+                        eprintln!("{} Selection out of range, please enter a number between 1 and {}.", "❌".red(), items.len());
+                        continue;
                     }
-                    Err(e) => {
-                        eprintln!("{} {}", "❌ Error:".red(), e.to_string().bright_red());
+
+                    let item = &items[selection - 1];
+                    let target = std::path::PathBuf::from(&item.full_path);
+                    
+                    if !target.exists() {
+                        eprintln!("{} Directory does not exist or is not accessible: {}", "❌".red(), target.display());
+                        continue;
+                    }
+
+                    let current_dir = env::current_dir()?;
+                    let new_previous_dir = if target != current_dir {
+                        Some(current_dir.display().to_string())
+                    } else {
+                        None
+                    };
+
+                    env::set_current_dir(&target)?;
+                    let plain_path = target.display().to_string();
+                    let display = format!("{} {}", "Changed to:".green(), plain_path.cyan());
+                    println!("{}", display);
+
+                    if let Some(new_prev) = new_previous_dir {
+                        previous_dir = Some(new_prev);
+                    }
+                } else {
+                    match execute_command(input, &alias_manager, &tag_manager, &mut previous_dir) {
+                        Ok(CommandResult::Normal(should_exit)) => {
+                            if should_exit {
+                                break;
+                            }
+                        }
+                        Ok(CommandResult::NeedCdSelection(items)) => {
+                            let tag = items.get(0).and_then(|item| item.tags.first().cloned());
+                            let output = cd::render_selection_list(&items);
+                            println!("{}", output);
+                            pending_cd_selection = Some((items, tag));
+                        }
+                        Err(e) => {
+                            eprintln!("{} {}", "❌ Error:".red(), e.to_string().bright_red());
+                        }
                     }
                 }
             }
             Err(rustyline::error::ReadlineError::Interrupted) => {
-                println!("{}", "👋 Goodbye!".bright_green());
-                break;
+                if pending_cd_selection.is_some() {
+                    pending_cd_selection = None;
+                    println!("\nSelection cancelled.");
+                } else {
+                    println!("{}", "👋 Goodbye!".bright_green());
+                    break;
+                }
             }
             Err(rustyline::error::ReadlineError::Eof) => {
                 println!("{}", "👋 Goodbye!".bright_green());
@@ -441,10 +554,81 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             clipboard::cmd_cpf(&resolved_path)
         }
         "cd" => {
-            let path = args.get(arg_offset + 1).map(|s| s.as_str());
-            let resolved_path = path.map(|p| alias_manager.resolve_path(p));
-            let (display, raw, _) = cd::cmd_cd(resolved_path.as_deref(), None)?;
-            Ok((display, raw))
+            let mut is_idx = false;
+            let mut idx_tag: Option<String> = None;
+            let mut path: Option<String> = None;
+
+            let mut i = arg_offset + 1;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "-idx" => {
+                        is_idx = true;
+                        if i + 1 < args.len() {
+                            idx_tag = Some(args[i + 1].clone());
+                            i += 1;
+                        }
+                    }
+                    p => path = Some(alias_manager.resolve_path(p)),
+                }
+                i += 1;
+            }
+
+            if is_idx {
+                match cd::cmd_cd(
+                    None,
+                    None,
+                    true,
+                    idx_tag.as_deref(),
+                    Some(&tag_manager),
+                    None,
+                )? {
+                    cd::CdResult::Success(display, raw, _) => Ok((display, raw)),
+                    cd::CdResult::NeedSelection(items) => {
+                        let output = cd::render_selection_list(&items);
+                        println!("{}", output);
+                        print!("{} Enter selection number: ", "📍".bright_blue());
+                        let _ = std::io::Write::flush(&mut std::io::stdout());
+
+                        let mut input = String::new();
+                        std::io::stdin().read_line(&mut input)?;
+                        let selection: usize = match input.trim().parse() {
+                            Ok(n) => n,
+                            Err(_) => {
+                                return Err("Invalid input, please enter a number.".into());
+                            }
+                        };
+
+                        if selection < 1 || selection > items.len() {
+                            return Err(format!(
+                                "Selection out of range, please enter a number between 1 and {}.",
+                                items.len()
+                            )
+                            .into());
+                        }
+
+                        let item = &items[selection - 1];
+                        let target = std::path::PathBuf::from(&item.full_path);
+
+                        if !target.exists() {
+                            return Err(format!(
+                                "Directory does not exist or is not accessible: {}",
+                                target.display()
+                            )
+                            .into());
+                        }
+
+                        env::set_current_dir(&target)?;
+                        let plain_path = target.display().to_string();
+                        let display = format!("{} {}", "Changed to:".green(), plain_path.cyan());
+                        Ok((display, plain_path))
+                    }
+                }
+            } else {
+                match cd::cmd_cd(path.as_deref(), None, false, None, None, None)? {
+                    cd::CdResult::Success(display, raw, _) => Ok((display, raw)),
+                    cd::CdResult::NeedSelection(_) => Err("Unexpected error".into()),
+                }
+            }
         }
         "ls" => {
             let mut all = false;
@@ -613,5 +797,3 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-
-// todo: mv命令批量操作，移动和复制过程可视化

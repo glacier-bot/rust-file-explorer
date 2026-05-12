@@ -30,12 +30,12 @@ impl TagManager {
                             Ok(backup_tags) => {
                                 tags = backup_tags;
                                 fs::copy(&backup_path, &config_path)?;
-                                eprintln!("⚠️  标签主文件损坏，已从备份恢复");
+                                eprintln!("⚠️  Tag file corrupted, restored from backup.");
                             }
-                            Err(_) => return Err(format!("标签文件损坏且备份也无法读取: {}", e).into())
+                            Err(_) => return Err(format!("Tag file corrupted and backup cannot be read: {}", e).into())
                         }
                     } else {
-                        return Err(format!("标签文件损坏且无备份可用: {}", e).into())
+                        return Err(format!("Tag file corrupted and no backup available: {}", e).into())
                     }
                 }
             }
@@ -43,11 +43,67 @@ impl TagManager {
             if let Ok(backup_tags) = Self::load_from_file(&backup_path) {
                 tags = backup_tags;
                 fs::copy(&backup_path, &config_path)?;
-                eprintln!("⚠️  标签主文件丢失，已从备份恢复");
+                eprintln!("⚠️  Tag file missing, restored from backup.");
             }
         }
         
-        Ok(Self { tags, config_path, backup_path })
+        let need_save = Self::migrate_unc_paths(&mut tags);
+        
+        let manager = Self { tags, config_path, backup_path };
+        
+        if need_save {
+            let _ = manager.save();
+        }
+        
+        Ok(manager)
+    }
+    
+    fn normalize_path(path: &str) -> Result<String, Box<dyn std::error::Error>> {
+        let path_buf = PathBuf::from(path);
+        let abs_path = fs::canonicalize(&path_buf)?;
+        let mut path_str = abs_path.to_string_lossy().to_string();
+        
+        if cfg!(windows) {
+            if path_str.starts_with("\\\\?\\UNC\\") {
+                path_str = format!("\\\\{}", &path_str[8..]);
+            } else if path_str.starts_with("\\\\?\\") {
+                path_str = path_str[4..].to_string();
+            }
+        }
+        
+        Ok(path_str)
+    }
+    
+    fn convert_unc_path_to_normal(path: &str) -> String {
+        let mut path_str = path.to_string();
+        
+        if cfg!(windows) {
+            if path_str.starts_with("\\\\?\\UNC\\") {
+                path_str = format!("\\\\{}", &path_str[8..]);
+            } else if path_str.starts_with("UNC\\") {
+                path_str = format!("\\\\{}", &path_str[4..]);
+            } else if path_str.starts_with("\\\\?\\") {
+                path_str = path_str[4..].to_string();
+            }
+        }
+        
+        path_str
+    }
+    
+    fn migrate_unc_paths(tags: &mut HashMap<String, Vec<String>>) -> bool {
+        let mut need_migrate = false;
+        let mut new_tags = HashMap::new();
+        
+        for (path, tag_list) in tags.drain() {
+            let new_path = Self::convert_unc_path_to_normal(&path);
+            if new_path != path {
+                need_migrate = true;
+            }
+            new_tags.insert(new_path, tag_list);
+        }
+        
+        *tags = new_tags;
+        need_migrate
     }
     
     pub fn load_from_file(path: &PathBuf) -> Result<HashMap<String, Vec<String>>, Box<dyn std::error::Error>> {
@@ -79,17 +135,17 @@ impl TagManager {
             fs::copy(&self.config_path, &self.backup_path)?;
             Ok(())
         } else {
-            Err("标签文件不存在，无法备份".into())
+            Err("Tag file does not exist, cannot backup.".into())
         }
     }
-    
+
     pub fn restore(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if self.backup_path.exists() {
             self.tags = Self::load_from_file(&self.backup_path)?;
             self.save()?;
             Ok(())
         } else {
-            Err("备份文件不存在，无法恢复".into())
+            Err("Backup file does not exist, cannot restore.".into())
         }
     }
     
@@ -99,18 +155,16 @@ impl TagManager {
             return Err(format!("文件或文件夹不存在: {}", file_path).into());
         }
         
-        let abs_path = fs::canonicalize(&path)?
-            .to_string_lossy()
-            .to_string();
+        let abs_path = Self::normalize_path(file_path)?;
         
         for tag in tags {
-            if tag.is_empty() {
-                return Err("标签不能为空".into());
+                if tag.is_empty() {
+                    return Err("Tag cannot be empty.".into());
+                }
+                if tag.contains(|c: char| c.is_whitespace() || c == ',' || c == ';' || c == '/' || c == '\\') {
+                    return Err(format!("Tag contains invalid characters: {}", tag).into());
+                }
             }
-            if tag.contains(|c: char| c.is_whitespace() || c == ',' || c == ';' || c == '/' || c == '\\') {
-                return Err(format!("标签包含无效字符: {}", tag).into());
-            }
-        }
         
         let existing_tags = self.tags.entry(abs_path).or_default();
         for tag in tags {
@@ -127,51 +181,46 @@ impl TagManager {
     pub fn remove_tags(&mut self, file_path: &str, tags: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
         let path = PathBuf::from(file_path);
         if !path.exists() {
-            return Err(format!("文件或文件夹不存在: {}", file_path).into());
+            return Err(format!("File or directory does not exist: {}", file_path).into());
         }
-        
-        let abs_path = fs::canonicalize(&path)?
-            .to_string_lossy()
-            .to_string();
-        
+
+        let abs_path = Self::normalize_path(file_path)?;
+
         if let Some(existing_tags) = self.tags.get_mut(&abs_path) {
             for tag in tags {
                 existing_tags.retain(|t| t != tag);
             }
-            
+
             if existing_tags.is_empty() {
                 self.tags.remove(&abs_path);
             }
-            
+
             self.save()?;
             Ok(())
         } else {
-            Err(format!("该文件没有任何标签: {}", file_path).into())
+            Err(format!("No tags found for this file: {}", file_path).into())
         }
     }
-    
+
     pub fn remove_all_tags(&mut self, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
         let path = PathBuf::from(file_path);
         if !path.exists() {
-            return Err(format!("文件或文件夹不存在: {}", file_path).into());
+            return Err(format!("File or directory does not exist: {}", file_path).into());
         }
-        
-        let abs_path = fs::canonicalize(&path)?
-            .to_string_lossy()
-            .to_string();
-        
+
+        let abs_path = Self::normalize_path(file_path)?;
+
         if self.tags.remove(&abs_path).is_some() {
             self.save()?;
             Ok(())
         } else {
-            Err(format!("该文件没有任何标签: {}", file_path).into())
+            Err(format!("No tags found for this file: {}", file_path).into())
         }
     }
     
     pub fn get_tags(&self, file_path: &str) -> Vec<String> {
-        match fs::canonicalize(file_path) {
-            Ok(abs_path) => {
-                let path_str = abs_path.to_string_lossy().to_string();
+        match Self::normalize_path(file_path) {
+            Ok(path_str) => {
                 self.tags.get(&path_str).cloned().unwrap_or_default()
             }
             Err(_) => Vec::new()
@@ -193,9 +242,8 @@ impl TagManager {
     }
     
     pub fn file_matches_tags(&self, file_path: &str, tag_patterns: &[Regex]) -> bool {
-        match fs::canonicalize(file_path) {
-            Ok(abs_path) => {
-                let path_str = abs_path.to_string_lossy().to_string();
+        match Self::normalize_path(file_path) {
+            Ok(path_str) => {
                 match self.tags.get(&path_str) {
                     Some(tags) => {
                         tag_patterns.iter().all(|pattern| {
@@ -215,11 +263,7 @@ impl TagManager {
             if tag_patterns.iter().all(|pattern| {
                 tags.iter().any(|tag| pattern.is_match(tag))
             }) {
-                let mut display_path = path.clone();
-                if cfg!(windows) && display_path.starts_with("\\\\?\\") {
-                    display_path = display_path[4..].to_string();
-                }
-                result.push((display_path, tags.clone()));
+                result.push((path.clone(), tags.clone()));
             }
         }
         result
