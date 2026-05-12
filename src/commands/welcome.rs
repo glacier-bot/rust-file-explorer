@@ -34,7 +34,11 @@ fn format_standard_welcome() -> String {
     output.push('\n');
     output.push_str(&format!(
         "{}",
-        format!("║           Rust File Explorer v{}                          ║", VERSION).bright_green()
+        format!(
+            "║           Rust File Explorer v{}                         ║",
+            VERSION
+        )
+        .bright_green()
     ));
     output.push('\n');
     output.push_str(&format!(
@@ -164,7 +168,11 @@ fn format_moe_welcome() -> String {
     output.push_str(&format!(
         "{}{}{}",
         "║ ".truecolor(255, 105, 180),
-        format!("        🌸✨ Rust File Explorer v{} ✨🌸                 ", VERSION).truecolor(255, 182, 193),
+        format!(
+            "        🌸✨ Rust File Explorer v{} ✨🌸                ",
+            VERSION
+        )
+        .truecolor(255, 182, 193),
         " ║".truecolor(255, 105, 180)
     ));
     output.push('\n');
@@ -335,7 +343,7 @@ fn format_moe_welcome() -> String {
 mod tests {
     use super::*;
     use crate::utils::moe::enable_moe;
-    use std::sync::atomic::Ordering;
+    // use std::sync::atomic::Ordering;
 
     #[test]
     fn test_welcome_standard_mode() {

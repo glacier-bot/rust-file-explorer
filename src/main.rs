@@ -289,6 +289,11 @@ fn execute_single_command(
             let (display, _raw) = mkdf::cmd_mkdf(&mkdf_args)?;
             Ok((CommandResult::Normal(false), display, None))
         }
+        "change" => {
+            let change_args: Vec<&str> = parts[1..].iter().map(|s| s.as_str()).collect();
+            let (display, _raw) = commands::change::cmd_change(&change_args)?;
+            Ok((CommandResult::Normal(false), display, None))
+        }
         _ => {
             if is_moe() {
                 let display = format!(
@@ -753,6 +758,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "mkdf" => {
             let mkdf_args: Vec<&str> = args[arg_offset + 1..].iter().map(|s| s.as_str()).collect();
             mkdf::cmd_mkdf(&mkdf_args)
+        }
+        "change" => {
+            let change_args: Vec<&str> = args[arg_offset + 1..].iter().map(|s| s.as_str()).collect();
+            commands::change::cmd_change(&change_args)
         }
         _ => {
             if is_moe() {

@@ -3,6 +3,7 @@
 
 pub mod alias;
 pub mod cd;
+pub mod change;
 pub mod clear;
 pub mod clipboard;
 pub mod help;

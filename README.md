@@ -23,6 +23,7 @@
 - 🌸 **Moe Moe 模式**：使用 `-moe` 或 `--moe` 参数启动，欢迎界面和所有输出增加可爱颜文字表情，配色统一为粉色系，更适合二次元宝宝体质
 - 🎉 **Welcome 命令**：随时输入 `welcome` 命令重新显示欢迎页面，支持标准模式和 Moe Moe 模式自适应
 - 🔖 **`cd -idx <tag>` 标签跳转**：通过标签快速跳转到包含 `.index` 文件的目录，支持多标签匹配和交互式选择，无需记住路径
+- 🔄 **`change` 模式切换命令**：使用 `change -std` 切换到标准模式，使用 `change -moe` 切换到 Moe Moe 模式，可在运行时动态切换
 
 ## 🔑 核心概念与进阶特性
 
@@ -346,6 +347,8 @@ cd -idx "work.*important"
 rfe -moe              # 以 Moe 模式进入 REPL 交互模式
 rfe --moe             # 长形式参数
 rfe -moe <command>    # 以 Moe 模式执行命令
+change -moe           # 在 REPL 模式中切换到 Moe 模式
+change -std           # 在 REPL 模式中切换回标准模式
 ```
 
 #### 使用示例
@@ -511,6 +514,8 @@ rfe <command> [arguments]
 | `mkdf -d -p <path>`                         | 创建文件夹和父目录                                  | `mkdf -d -p parent/child/grandchild`                                      |
 | `mkdf -h` / `--help`                        | 查看mkdf命令帮助                                    | `mkdf --help`                                                             |
 | `welcome`                                   | 显示欢迎页面（自动适配当前模式）                    | `rfe welcome`、`welcome`                                                  |
+| `change -std` / `change --std`              | 切换到标准模式                                    | `change -std`                                                          |
+| `change -moe` / `change --moe`              | 切换到 Moe Moe 萌系模式                           | `change -moe`                                                         |
 | `ls --re <pattern>`                         | 使用正则表达式搜索文件/目录                         | `rfe ls --re \.rs$`                                                       |
 | `ls --re-deep <pattern>`                    | 递归使用正则表达式搜索                              | `rfe ls --re-deep \.rs$`                                                  |
 | `ls --re --xcaps <pattern>`                 | 大小写不敏感的正则搜索                              | `rfe ls --re --xcaps \.RS$`                                               |
