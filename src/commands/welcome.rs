@@ -146,6 +146,29 @@ fn format_standard_welcome() -> String {
     output.push_str(&format!("  {}  - Exit the program", "exit".cyan().bold()));
     output.push('\n');
     output.push('\n');
+    output.push_str(&format!("{}", "✨ Powerful features:".bright_blue().bold()));
+    output.push('\n');
+    output.push_str(&format!(
+        "  {}  - Chain commands, pass previous output to next",
+        "cmd -> cmd".cyan().bold()
+    ));
+    output.push('\n');
+    output.push_str(&format!(
+        "  {}  - Placeholder for previous command output",
+        "{}".cyan().bold()
+    ));
+    output.push('\n');
+    output.push_str(&format!(
+        "  {}  - Pop path (go up directory levels)",
+        "{}.pop.pop...".cyan().bold()
+    ));
+    output.push('\n');
+    output.push_str(&format!(
+        "  {}  - Use path alias (@alias)",
+        "@<alias>".cyan().bold()
+    ));
+    output.push('\n');
+    output.push('\n');
     output.push_str(&format!("{}", "Keyboard shortcuts:".bright_yellow().bold()));
     output.push('\n');
     output.push_str(&format!(
@@ -320,6 +343,37 @@ fn format_moe_welcome() -> String {
         "  {}  - Exit the program {}",
         "exit".truecolor(255, 182, 193).bold(),
         "👋"
+    ));
+    output.push('\n');
+    output.push('\n');
+    output.push_str(&format!(
+        "{} {}",
+        "💖 Powerful features:".truecolor(255, 160, 122).bold(),
+        "💕"
+    ));
+    output.push('\n');
+    output.push_str(&format!(
+        "  {}  - Chain commands, pass output to next {}",
+        "cmd -> cmd".truecolor(255, 182, 193).bold(),
+        "✨"
+    ));
+    output.push('\n');
+    output.push_str(&format!(
+        "  {}  - Placeholder for previous command output {}",
+        "{}".truecolor(255, 182, 193).bold(),
+        "💫"
+    ));
+    output.push('\n');
+    output.push_str(&format!(
+        "  {}  - Pop path (go up directory levels) {}",
+        "{}.pop.pop...".truecolor(255, 182, 193).bold(),
+        "💖"
+    ));
+    output.push('\n');
+    output.push_str(&format!(
+        "  {}  - Use path alias (@alias) {}",
+        "@<alias>".truecolor(255, 182, 193).bold(),
+        "✨"
     ));
     output.push('\n');
     output.push('\n');
