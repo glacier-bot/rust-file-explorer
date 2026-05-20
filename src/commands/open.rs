@@ -36,7 +36,25 @@ pub fn cmd_open(path: &str) -> Result<(String, String), Box<dyn std::error::Erro
         return Ok((display, plain_path));
     }
 
-    open::that(&target)?;
+    #[cfg(target_os = "windows")]
+    {
+        let path_str = target.to_string_lossy();
+        let ps_command = format!("Start-Process -FilePath '{}'", path_str.replace('\'', "''"));
+        Command::new("powershell")
+            .args(["-NoProfile", "-Command", &ps_command])
+            .spawn()?;
+    }
+    
+    #[cfg(target_os = "macos")]
+    Command::new("open")
+        .arg(&target)
+        .spawn()?;
+    
+    #[cfg(target_os = "linux")]
+    Command::new("xdg-open")
+        .arg(&target)
+        .spawn()?;
+    
     let display = format!(
         "{} {} {}",
         "✔ Opened file".bright_green(),
