@@ -165,7 +165,7 @@ pub fn cmd_mv(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::moe::{enable_moe, disable_moe};
+    use crate::utils::moe::{disable_moe, enable_moe};
     use std::fs;
     use tempfile::tempdir;
 
@@ -175,11 +175,7 @@ mod tests {
         let source_path = temp_dir.path().join("test_file.txt");
         fs::write(&source_path, "test content").unwrap();
 
-        let result = cmd_mv(
-            source_path.to_str().unwrap(),
-            "nonexistent_dir/",
-            false,
-        );
+        let result = cmd_mv(source_path.to_str().unwrap(), "nonexistent_dir/", false);
 
         assert!(result.is_err());
         let err_msg = result.err().unwrap().to_string();
@@ -284,11 +280,7 @@ mod tests {
         let source_path = temp_dir.path().join("test_file.txt");
         fs::write(&source_path, "test content").unwrap();
 
-        let result = cmd_mv(
-            source_path.to_str().unwrap(),
-            "nonexistent_dir/",
-            true,
-        );
+        let result = cmd_mv(source_path.to_str().unwrap(), "nonexistent_dir/", true);
 
         assert!(result.is_err());
         let err_msg = result.err().unwrap().to_string();
@@ -311,7 +303,7 @@ mod tests {
         );
 
         assert!(result.is_ok());
-        let (output, raw) = result.unwrap();
+        let (output, _raw) = result.unwrap();
         assert!(output.contains("Copied"));
         assert!(source_path.exists());
         assert!(dest_dir.join("test_file.txt").exists());
@@ -324,11 +316,7 @@ mod tests {
         let source_path = temp_dir.path().join("test_file.txt");
         fs::write(&source_path, "test content").unwrap();
 
-        let result = cmd_mv(
-            source_path.to_str().unwrap(),
-            "nonexistent_dir/",
-            false,
-        );
+        let result = cmd_mv(source_path.to_str().unwrap(), "nonexistent_dir/", false);
 
         assert!(result.is_err());
         let err_msg = result.err().unwrap().to_string();
@@ -343,11 +331,7 @@ mod tests {
         let source_path = temp_dir.path().join("test_file.txt");
         fs::write(&source_path, "test content").unwrap();
 
-        let result = cmd_mv(
-            source_path.to_str().unwrap(),
-            "nonexistent_dir/",
-            false,
-        );
+        let result = cmd_mv(source_path.to_str().unwrap(), "nonexistent_dir/", false);
 
         assert!(result.is_err());
         let err_msg = result.err().unwrap().to_string();
@@ -374,7 +358,7 @@ mod tests {
         );
 
         assert!(result.is_ok());
-        let (output, raw) = result.unwrap();
+        let (output, _raw) = result.unwrap();
         assert!(output.contains("Moved"));
         assert!(!source_dir.exists());
         assert!(dest_dir.join("source_dir").exists());
