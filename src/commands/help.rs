@@ -269,8 +269,19 @@ pub fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
             "  Use {{}} as placeholder to insert previous command's output ✨\n"
         ));
         output.push_str(&format!(
-            "  Example: {} cppwd -> alias add desktop {{}} 💖\n\n",
+            "  Example: {} cppwd -> alias add desktop {{}} 💖\n",
             "$".truecolor(255, 105, 180)
+        ));
+        output.push_str(&format!(
+            "  Use {} to pop path levels (each .pop or . goes up one level) 🌸\n",
+            "{}.pop.pop...".truecolor(255, 160, 122).bold()
+        ));
+        output.push_str(&format!(
+            "  Example: {} pwd -> cd {{}}.pop.pop  (go up 2 directories) 💫\n",
+            "$".truecolor(255, 105, 180)
+        ));
+        output.push_str(&format!(
+            "  Shorthand: {{}}.pop ≡ {{}}.  /  {{}}.pop.pop ≡ {{}}.. ✨\n\n"
         ));
     } else {
         output.push_str(&format!(
@@ -529,8 +540,19 @@ pub fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
             "  Use {{}} as placeholder to insert previous command's output\n"
         ));
         output.push_str(&format!(
-            "  Example: {} cppwd -> alias add desktop {{}}\n\n",
+            "  Example: {} cppwd -> alias add desktop {{}}\n",
             "$".bright_black()
+        ));
+        output.push_str(&format!(
+            "  Use {} to pop path levels (each .pop or . goes up one level)\n",
+            "{}.pop.pop...".yellow().bold()
+        ));
+        output.push_str(&format!(
+            "  Example: {} pwd -> cd {{}}.pop.pop  (go up 2 directories)\n",
+            "$".bright_black()
+        ));
+        output.push_str(&format!(
+            "  Shorthand: {{}}.pop ≡ {{}}.  /  {{}}.pop.pop ≡ {{}}..\n\n"
         ));
     }
 

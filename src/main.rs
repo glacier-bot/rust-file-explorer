@@ -11,7 +11,7 @@ mod models;
 mod utils;
 
 use crate::utils::moe::{self, is_moe};
-use crate::utils::path::pop_path;
+use crate::utils::path::expand_pop_placeholders;
 
 use crate::utils::split_command_args;
 
@@ -351,42 +351,35 @@ fn execute_command(
         };
 
         let mut cmd = cmd.to_string();
-        while cmd.contains("{}") {
-            let replacement = if let Some(pos) = cmd.find("{}") {
-                let after = &cmd[pos + 2..];
-                let pop_count = after.chars().take_while(|&c| c == '.').count();
-                let result = pop_path(&previous_raw_data, pop_count);
-                if result.reached_boundary {
-                    if is_moe() {
-                        println!(
-                            "{} {} {} {}",
-                            "✨".truecolor(255, 182, 193),
-                            "Oopsie!".truecolor(255, 105, 180).bold(),
-                            "Can't go any higher, nya~ 💕".truecolor(255, 182, 193),
-                            format!(
-                                "(Stopped after {} pop(s) from '{}' )",
-                                result.actual_pops, previous_raw_data
-                            )
-                            .truecolor(255, 182, 193)
-                        );
-                    } else {
-                        println!(
-                            "{} {} {}",
-                            "⚠".yellow().bold(),
-                            "Path boundary reached:".yellow().bold(),
-                            format!(
-                                "stopped after {} pop(s) from '{}'",
-                                result.actual_pops, previous_raw_data
-                            )
-                            .yellow()
-                        );
-                    }
+        if cmd.contains("{}") {
+            let expand = expand_pop_placeholders(&cmd, &previous_raw_data);
+            if expand.reached_boundary {
+                if is_moe() {
+                    println!(
+                        "{} {} {} {}",
+                        "✨".truecolor(255, 182, 193),
+                        "Oopsie!".truecolor(255, 105, 180).bold(),
+                        "Can't go any higher, nya~ 💕".truecolor(255, 182, 193),
+                        format!(
+                            "(Stopped after {} pop(s) from '{}' )",
+                            expand.actual_pops, previous_raw_data
+                        )
+                        .truecolor(255, 182, 193)
+                    );
+                } else {
+                    println!(
+                        "{} {} {}",
+                        "⚠".yellow().bold(),
+                        "Path boundary reached:".yellow().bold(),
+                        format!(
+                            "stopped after {} pop(s) from '{}'",
+                            expand.actual_pops, previous_raw_data
+                        )
+                        .yellow()
+                    );
                 }
-                result.path
-            } else {
-                previous_raw_data.clone()
-            };
-            cmd = cmd.replacen("{}", &replacement, 1);
+            }
+            cmd = expand.expanded;
         }
 
         match execute_single_command(

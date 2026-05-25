@@ -159,7 +159,7 @@ fn format_standard_welcome() -> String {
     ));
     output.push('\n');
     output.push_str(&format!(
-        "  {}  - Pop path (go up directory levels)",
+        "  {}  - Pop path (each .pop or . goes up one directory level)",
         "{}.pop.pop...".cyan().bold()
     ));
     output.push('\n');
@@ -365,7 +365,7 @@ fn format_moe_welcome() -> String {
     ));
     output.push('\n');
     output.push_str(&format!(
-        "  {}  - Pop path (go up directory levels) {}",
+        "  {}  - Pop path (each .pop or . goes up one directory level) {}",
         "{}.pop.pop...".truecolor(255, 182, 193).bold(),
         "💖"
     ));
