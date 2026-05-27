@@ -42,6 +42,12 @@ impl AliasManager {
         if path.is_empty() {
             return Err("Path cannot be empty".into());
         }
+        
+        let path_buf = PathBuf::from(path);
+        if !path_buf.exists() {
+            return Err(format!("Path does not exist or is not accessible: {}", path).into());
+        }
+        
         self.aliases.insert(alias.to_string(), path.to_string());
         self.save()?;
         Ok(())

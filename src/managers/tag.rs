@@ -152,7 +152,11 @@ impl TagManager {
     pub fn add_tags(&mut self, file_path: &str, tags: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
         let path = PathBuf::from(file_path);
         if !path.exists() {
-            return Err(format!("File or directory does not exist: {}", file_path).into());
+            return Err(format!("File does not exist: {}", file_path).into());
+        }
+        
+        if path.is_dir() {
+            return Err(format!("Cannot add tags to directory: {}. Tags can only be added to files.", file_path).into());
         }
         
         let abs_path = Self::normalize_path(file_path)?;
@@ -181,7 +185,11 @@ impl TagManager {
     pub fn remove_tags(&mut self, file_path: &str, tags: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
         let path = PathBuf::from(file_path);
         if !path.exists() {
-            return Err(format!("File or directory does not exist: {}", file_path).into());
+            return Err(format!("File does not exist: {}", file_path).into());
+        }
+
+        if path.is_dir() {
+            return Err(format!("Cannot remove tags from directory: {}. Tags can only be removed from files.", file_path).into());
         }
 
         let abs_path = Self::normalize_path(file_path)?;
@@ -205,7 +213,11 @@ impl TagManager {
     pub fn remove_all_tags(&mut self, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
         let path = PathBuf::from(file_path);
         if !path.exists() {
-            return Err(format!("File or directory does not exist: {}", file_path).into());
+            return Err(format!("File does not exist: {}", file_path).into());
+        }
+
+        if path.is_dir() {
+            return Err(format!("Cannot remove tags from directory: {}. Tags can only be removed from files.", file_path).into());
         }
 
         let abs_path = Self::normalize_path(file_path)?;
