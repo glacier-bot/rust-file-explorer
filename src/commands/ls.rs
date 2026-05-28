@@ -5,6 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use unicode_width::UnicodeWidthStr;
+use walkdir::WalkDir;
 
 use crate::managers::tag::TagManager;
 use crate::models::FileInfo;
@@ -88,35 +89,43 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
         }
 
         fn walk_dir(dir: &Path, pattern: &Regex, all: bool, show_tags: bool, recursive: bool, tag_manager: &TagManager, files: &mut Vec<FileInfo>, dirs: &mut Vec<FileInfo>) -> Result<(), Box<dyn std::error::Error>> {
-            for entry in fs::read_dir(dir)?.filter_map(|e| e.ok()) {
-                let path = entry.path();
-                let path_str = path.to_string_lossy();
+            let current_dir = env::current_dir()?;
 
-                if !all && is_hidden(&path) {
+            let mut builder = WalkDir::new(dir).follow_links(false);
+
+            if !recursive {
+                builder = builder.max_depth(1);
+            }
+
+            let walker = builder.into_iter().filter_entry(|e| {
+                if !all && is_hidden(&e.path().to_path_buf()) {
+                    return false;
+                }
+                true
+            });
+
+            for entry in walker.filter_map(|e| e.ok()) {
+                let path = entry.path();
+
+                let is_inside_gdb = path.ancestors().skip(1).any(|a| {
+                    a.file_name()
+                        .and_then(|n| n.to_str())
+                        .is_some_and(|n| n.ends_with(".gdb"))
+                });
+                if is_inside_gdb {
                     continue;
                 }
 
-                // 检查是否是 .gdb 结尾的目录
-                let is_gdb_dir = path.is_dir() && {
-                    if let Some(dir_name) = path.file_name() {
-                        if let Some(dir_str) = dir_name.to_str() {
-                            dir_str.ends_with(".gdb")
-                        } else {
-                            false
-                        }
-                    } else {
-                        false
-                    }
-                };
+                let path_str = path.to_string_lossy();
 
                 if pattern.is_match(&path_str) {
                     match entry.metadata() {
                         Ok(meta) => {
-                            let (icon, color) = get_file_icon_and_color(&path, &meta);
+                            let (icon, color) = get_file_icon_and_color(path, &meta);
                             let created = meta.created().ok();
                             let modified = meta.modified().unwrap_or_else(|_| SystemTime::now());
-                            let name = path.strip_prefix(env::current_dir()?)
-                                .unwrap_or(&path)
+                            let name = path.strip_prefix(&current_dir)
+                                .unwrap_or(path)
                                 .to_string_lossy()
                                 .to_string();
 
@@ -125,7 +134,7 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
                             } else {
                                 Vec::new()
                             };
-                            
+
                             let file_info = FileInfo {
                                 name,
                                 icon,
@@ -144,16 +153,6 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
                             }
                         }
                         Err(_) => continue,
-                    }
-                }
-
-                // 递归搜索时，如果是 .gdb 结尾的目录，显示但不遍历其内容
-                if path.is_dir() && recursive {
-                    if is_gdb_dir {
-                        // .gdb 目录：显示但不遍历
-                        continue;
-                    } else if walk_dir(&path, pattern, all, show_tags, recursive, tag_manager, files, dirs).is_err() {
-                        continue;
                     }
                 }
             }
@@ -187,34 +186,38 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
 
         if !tag_patterns.is_empty() && recursive {
             fn walk_dir_for_tags(dir: &Path, all: bool, show_tags: bool, tag_manager: &TagManager, files: &mut Vec<FileInfo>, dirs: &mut Vec<FileInfo>) -> Result<(), Box<dyn std::error::Error>> {
-                for entry in fs::read_dir(dir)?.filter_map(|e| e.ok()) {
+                let current_dir = env::current_dir()?;
+
+                let walker = WalkDir::new(dir)
+                    .follow_links(false)
+                    .into_iter()
+                    .filter_entry(|e| {
+                        if !all && is_hidden(&e.path().to_path_buf()) {
+                            return false;
+                        }
+                        true
+                    });
+
+                for entry in walker.filter_map(|e| e.ok()) {
                     let path = entry.path();
 
-                    if !all && is_hidden(&path) {
+                    let is_inside_gdb = path.ancestors().skip(1).any(|a| {
+                        a.file_name()
+                            .and_then(|n| n.to_str())
+                            .is_some_and(|n| n.ends_with(".gdb"))
+                    });
+                    if is_inside_gdb {
                         continue;
                     }
 
-                    // 检查是否是 .gdb 结尾的目录
-                    let is_gdb_dir = path.is_dir() && {
-                        if let Some(dir_name) = path.file_name() {
-                            if let Some(dir_str) = dir_name.to_str() {
-                                dir_str.ends_with(".gdb")
-                            } else {
-                                false
-                            }
-                        } else {
-                            false
-                        }
-                    };
-
-                    let name = path.strip_prefix(env::current_dir()?)
-                        .unwrap_or(&path)
+                    let name = path.strip_prefix(&current_dir)
+                        .unwrap_or(path)
                         .to_string_lossy()
                         .to_string();
 
                     match entry.metadata() {
                         Ok(meta) => {
-                            let (icon, color) = get_file_icon_and_color(&path, &meta);
+                            let (icon, color) = get_file_icon_and_color(path, &meta);
                             let created = meta.created().ok();
                             let modified = meta.modified().unwrap_or_else(|_| SystemTime::now());
 
@@ -223,7 +226,7 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
                             } else {
                                 Vec::new()
                             };
-                            
+
                             let file_info = FileInfo {
                                 name,
                                 icon,
@@ -253,16 +256,6 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
                                 tags: Vec::new(),
                             };
                             files.push(file_info);
-                        }
-                    }
-
-                    // 如果是 .gdb 结尾的目录，显示但不遍历其内容
-                    if path.is_dir() {
-                        if is_gdb_dir {
-                            // .gdb 目录：显示但不遍历
-                            continue;
-                        } else if walk_dir_for_tags(&path, all, show_tags, tag_manager, files, dirs).is_err() {
-                            continue;
                         }
                     }
                 }
