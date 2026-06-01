@@ -16,6 +16,27 @@ use crate::cache::{cache_dir_entries, get_cached_dir_entries};
 use crate::managers::alias::AliasManager;
 use crate::managers::tag::TagManager;
 
+/// 判断路径是否包含需要用双引号包裹的特殊字符
+/// 包括：空格、英文括号 () [] {}、& | ; , ^ ! 等会被 shell 或命令解析器拆分的字符
+/// 注意：不包含 / \ 这类合法的路径分隔符；也不包含 @ 这类已被解释的前缀
+pub(crate) fn needs_quoting(path: &str) -> bool {
+    path.chars().any(|c| matches!(
+        c,
+        ' ' | '\t' | '(' | ')' | '[' | ']' | '{' | '}'
+            | '&' | '|' | ';' | ',' | '^' | '!' | '`' | '$' | '#'
+    ))
+}
+
+/// 给补全候选添加双引号包裹（保留尾部斜杠）
+/// 例如：`my dir/` -> `"my dir/"`、`my (dir)` -> `"my (dir)"`
+/// 如果已经被双引号包裹，则保持不变
+pub(crate) fn quote_replacement(replacement: &str) -> String {
+    if replacement.starts_with('"') && replacement.ends_with('"') && replacement.len() >= 2 {
+        return replacement.to_string();
+    }
+    format!("\"{}\"", replacement)
+}
+
 /// RfeHelper 结构体
 /// 实现了 rustyline 的各种辅助功能
 pub struct RfeHelper {
@@ -121,17 +142,24 @@ impl Completer for RfeHelper {
                             } else {
                                 replacement.clone()
                             };
-                            
+
+                            // 统一引号策略：路径含空格/英文括号等特殊字符时用双引号包裹
+                            let final_replacement = if needs_quoting(&replacement_with_sep) {
+                                quote_replacement(&replacement_with_sep)
+                            } else {
+                                replacement_with_sep
+                            };
+
                             candidates.push(Pair {
                                 display: name.clone(),
-                                replacement: replacement_with_sep,
+                                replacement: final_replacement,
                             });
                         }
                         
                         // 按目录在前、文件在后排序
                         candidates.sort_by(|a, b| {
-                            let a_is_dir = a.replacement.ends_with('/');
-                            let b_is_dir = b.replacement.ends_with('/');
+                            let a_is_dir = a.replacement.trim_end_matches('"').ends_with('/');
+                            let b_is_dir = b.replacement.trim_end_matches('"').ends_with('/');
                             match (a_is_dir, b_is_dir) {
                                 (true, false) => std::cmp::Ordering::Less,
                                 (false, true) => std::cmp::Ordering::Greater,
@@ -191,10 +219,17 @@ impl Completer for RfeHelper {
                                     } else {
                                         format!("@{}/{}", alias, name)
                                     };
-                                    
+
+                                    // 统一引号策略：路径含空格/英文括号等特殊字符时用双引号包裹
+                                    let final_replacement = if needs_quoting(&replacement) {
+                                        quote_replacement(&replacement)
+                                    } else {
+                                        replacement
+                                    };
+
                                     sub_candidates.push(Pair {
                                         display: name,
-                                        replacement,
+                                        replacement: final_replacement,
                                     });
                                 }
                                 candidates.extend(sub_candidates);
@@ -279,15 +314,20 @@ impl Completer for RfeHelper {
             }
             Ok((result.0, candidates))
         } else {
-            // 未处于引号内：检测 FilenameCompleter 是否只添加了开头引号
+            // 未处于引号内：统一引号策略
+            // 1) FilenameCompleter 对含空格路径已加开头引号但缺尾引号，补上尾引号
+            // 2) 对含英文括号等其他特殊字符（FilenameCompleter 不会自动加引号）的路径，
+            //    手动在前后添加双引号
             let mut candidates = result.1;
             for candidate in &mut candidates {
-                let repl = &candidate.replacement;
-                // Windows 下 FilenameCompleter 对包含空格的无引号路径
-                // 会添加开头双引号但不添加结尾双引号，例如："test directory\
-                // 我们需要补充结尾双引号
+                let repl = candidate.replacement.clone();
+
                 if repl.starts_with('"') && !repl.ends_with('"') {
+                    // 含空格情况：FilenameCompleter 已加开头引号，补上结尾引号
                     candidate.replacement = format!("{}\"", repl);
+                } else if !repl.starts_with('"') && needs_quoting(&repl) {
+                    // 含括号等特殊字符但 FilenameCompleter 未加引号：统一补全前后双引号
+                    candidate.replacement = quote_replacement(&repl);
                 }
             }
             Ok((result.0, candidates))
@@ -666,5 +706,122 @@ mod tests {
         println!("场景2候选数: {}", result2.1.len());
         
         assert!(!result2.1.is_empty() || true, "场景2可能有也可能没有候选");
+    }
+
+    /// 测试 needs_quoting 辅助函数对各类特殊字符的识别
+    #[test]
+    fn test_needs_quoting_special_chars() {
+        // 不含特殊字符
+        assert!(!needs_quoting("simple"));
+        assert!(!needs_quoting("path/to/file.txt"));
+        assert!(!needs_quoting("C:\\Users\\q\\Desktop"));
+        assert!(!needs_quoting("中文路径"));
+
+        // 含空格
+        assert!(needs_quoting("my folder"));
+        assert!(needs_quoting("a b"));
+
+        // 含英文括号
+        assert!(needs_quoting("Program Files (x86)"));
+        assert!(needs_quoting("dir(1)"));
+        assert!(needs_quoting("[bracket]"));
+        assert!(needs_quoting("{brace}"));
+
+        // 其他 shell 特殊字符
+        assert!(needs_quoting("a&b"));
+        assert!(needs_quoting("a|b"));
+        assert!(needs_quoting("a;b"));
+        assert!(needs_quoting("a,b"));
+    }
+
+    /// 测试 quote_replacement 辅助函数
+    #[test]
+    fn test_quote_replacement_behavior() {
+        // 基本包裹
+        assert_eq!(quote_replacement("my dir"), r#""my dir""#);
+        assert_eq!(quote_replacement("dir(1)/"), r#""dir(1)/""#);
+
+        // 已被双引号包裹则保持不变
+        assert_eq!(quote_replacement(r#""my dir""#), r#""my dir""#);
+    }
+
+    /// 测试 @alias 子路径补全在含特殊字符路径下统一加引号
+    /// 通过模拟一个含括号的别名目录验证
+    #[test]
+    fn test_alias_sub_path_completion_with_special_chars() {
+        use std::fs;
+        let helper = create_helper();
+        let history = MemHistory::default();
+        let ctx = Context::new(&history);
+
+        // 创建临时目录结构：tmp_root/sub (1)/inner.txt
+        let tmp_root = std::env::temp_dir().join("rfe_test_alias_special");
+        let _ = fs::remove_dir_all(&tmp_root);
+        let sub_dir = tmp_root.join("sub (1)");
+        fs::create_dir_all(&sub_dir).unwrap();
+        fs::write(sub_dir.join("inner.txt"), "x").unwrap();
+
+        // 注册别名指向 tmp_root（直接操作 HashMap 避免污染真实配置）
+        {
+            let mut mgr = helper.alias_manager.lock().unwrap();
+            mgr.aliases.insert(
+                "rfe_special_alias".to_string(),
+                tmp_root.to_string_lossy().to_string(),
+            );
+        }
+
+        // 触发 @alias/ 子路径补全
+        let line = "cd @rfe_special_alias/";
+        let result = helper.complete(line, line.len(), &ctx).unwrap();
+
+        let dir_candidate = result
+            .1
+            .iter()
+            .find(|c| c.display.contains("sub (1)"));
+        assert!(dir_candidate.is_some(), "应包含含括号的目录候选");
+        let replacement = &dir_candidate.unwrap().replacement;
+        assert!(
+            replacement.starts_with('"') && replacement.ends_with('"'),
+            "含括号的别名子路径补全应被双引号包裹: {}",
+            replacement
+        );
+
+        // 清理
+        let _ = fs::remove_dir_all(&tmp_root);
+        let mut mgr = helper.alias_manager.lock().unwrap();
+        mgr.aliases.remove("rfe_special_alias");
+    }
+
+    /// 测试默认文件名补全对仅含括号（无空格）特殊字符的路径也加双引号
+    #[test]
+    fn test_default_completion_quotes_parentheses() {
+        use std::fs;
+        let helper = create_helper();
+        let history = MemHistory::default();
+        let ctx = Context::new(&history);
+
+        let tmp_root = std::env::temp_dir().join("rfe_test_paren");
+        let _ = fs::remove_dir_all(&tmp_root);
+        fs::create_dir_all(&tmp_root).unwrap();
+        fs::create_dir_all(tmp_root.join("paren(only)")).unwrap();
+
+        let prefix = tmp_root.join("paren").to_string_lossy().to_string();
+        let line = format!("cd {}", prefix);
+        let result = helper.complete(&line, line.len(), &ctx).unwrap();
+
+        let cand = result
+            .1
+            .iter()
+            .find(|c| c.replacement.contains("paren(only)"));
+        if let Some(c) = cand {
+            assert!(
+                c.replacement.starts_with('"') && c.replacement.trim_end_matches('/').ends_with('"')
+                    || c.replacement.ends_with('"'),
+                "含括号的补全候选应被双引号包裹: {}",
+                c.replacement
+            );
+        }
+
+        let _ = fs::remove_dir_all(&tmp_root);
     }
 }
