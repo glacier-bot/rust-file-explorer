@@ -273,6 +273,14 @@ impl Completer for RfeHelper {
             }
         }
         
+        // 检查光标是否紧邻闭合引号之后，这种情况路径已经完整，不提供路径补全
+        if pos > 0 {
+            let last_char = line[..pos].chars().last().unwrap();
+            if last_char == '"' || last_char == '\'' {
+                return Ok((pos, Vec::new()));
+            }
+        }
+
         // 使用默认的文件名补全
         // 注意：FilenameCompleter 在 Windows 下对包含空格的无引号路径，
         // 只会在结果开头添加双引号，不会添加结尾双引号。
@@ -280,9 +288,10 @@ impl Completer for RfeHelper {
         let result = self.completer.complete(line, pos, ctx)?;
 
         // 检查当前输入是否处于引号内
+        // 只遍历到光标位置的字符，光标后的引号不影响当前输入状态
         let mut in_quote = false;
         let mut quote_char = '"';
-        for c in line.chars() {
+        for c in line[..pos].chars() {
             match c {
                 '"' | '\'' if !in_quote => {
                     in_quote = true;
@@ -823,5 +832,98 @@ mod tests {
         }
 
         let _ = fs::remove_dir_all(&tmp_root);
+    }
+
+    /// 测试光标在闭合双引号后补全为空
+    #[test]
+    fn test_rfe_helper_no_completion_after_closed_double_quote() {
+        let helper = create_helper();
+        let history = MemHistory::default();
+        let ctx = Context::new(&history);
+
+        // 光标在闭合双引号后
+        let line = r#"cd "te sts""#;
+        let pos = line.len(); // 光标在最后一个"后面
+        let result = helper.complete(line, pos, &ctx).unwrap();
+
+        assert!(result.1.is_empty(), "闭合双引号后不应返回补全选项");
+    }
+
+    /// 测试光标在闭合单引号后补全为空
+    #[test]
+    fn test_rfe_helper_no_completion_after_closed_single_quote() {
+        let helper = create_helper();
+        let history = MemHistory::default();
+        let ctx = Context::new(&history);
+
+        // 光标在闭合单引号后
+        let line = "cd 'te sts'";
+        let pos = line.len(); // 光标在最后一个'后面
+        let result = helper.complete(line, pos, &ctx).unwrap();
+
+        assert!(result.1.is_empty(), "闭合单引号后不应返回补全选项");
+    }
+
+    /// 测试闭合引号后加空格补全第二个路径正常（多路径命令兼容）
+    #[test]
+    fn test_rfe_helper_completion_after_closed_quote_with_space() {
+        let helper = create_helper();
+        let history = MemHistory::default();
+        let ctx = Context::new(&history);
+
+        // mv命令，闭合第一个路径引号后加空格，准备补全第二个路径
+        let line = r#"mv "te sts" "#;
+        let pos = line.len();
+        let result = helper.complete(line, pos, &ctx).unwrap();
+
+        // 应该返回补全选项（当前目录下的文件）
+        assert!(!result.1.is_empty(), "闭合引号后加空格应正常返回补全选项");
+        // 验证不会有多余引号
+        for cand in result.1 {
+            if cand.replacement.contains(' ') {
+                #[cfg(windows)]
+                assert!(cand.replacement.starts_with('"') && cand.replacement.ends_with('"'), "含空格路径应正常加引号");
+            }
+        }
+    }
+
+    /// 测试闭合引号后加斜杠补全子目录正常
+    #[test]
+    fn test_rfe_helper_completion_after_closed_quote_with_slash() {
+        let helper = create_helper();
+        let history = MemHistory::default();
+        let ctx = Context::new(&history);
+
+        // 引号闭合后加斜杠，补全子目录内容
+        let line = r#"cd "te sts"/"#;
+        let pos = line.len();
+        let result = helper.complete(line, pos, &ctx).unwrap();
+
+        // 应该返回te sts目录下的in dex.txt补全
+        assert!(!result.1.is_empty(), "闭合引号后加斜杠应正常补全子目录");
+        let has_in_dex = result.1.iter().any(|c| c.display.contains("in dex"));
+        assert!(has_in_dex, "应该补全到te sts目录下的in dex.txt文件");
+    }
+
+    /// 测试无引号路径补全带空格的文件不会出现双重引号
+    #[test]
+    fn test_rfe_helper_no_double_quotes_for_space_path() {
+        let helper = create_helper();
+        let history = MemHistory::default();
+        let ctx = Context::new(&history);
+
+        // 输入cd te，补全te sts目录
+        let line = "cd te";
+        let pos = line.len();
+        let result = helper.complete(line, pos, &ctx).unwrap();
+
+        let te_sts_cand = result.1.iter().find(|c| c.display == "te sts");
+        assert!(te_sts_cand.is_some(), "应该找到te sts目录补全");
+        let replacement = &te_sts_cand.unwrap().replacement;
+        #[cfg(windows)]
+        {
+            assert!(replacement.starts_with('"') && replacement.ends_with("/\""), "补全结果应为\"te sts/\"，不会有双重引号");
+            assert!(!replacement.starts_with("\"\""), "不应出现双重开头引号");
+        }
     }
 }
