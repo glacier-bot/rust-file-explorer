@@ -255,15 +255,17 @@ impl Completer for RfeHelper {
                         }
                         
                         // 按目录在前、文件在后排序
-                        candidates.sort_by(|a, b| {
-                            let a_is_dir = a.replacement.trim_end_matches('"').ends_with('/');
-                            let b_is_dir = b.replacement.trim_end_matches('"').ends_with('/');
-                            match (a_is_dir, b_is_dir) {
-                                (true, false) => std::cmp::Ordering::Less,
-                                (false, true) => std::cmp::Ordering::Greater,
-                                _ => a.display.cmp(&b.display),
-                            }
-                        });
+        candidates.sort_by(|a, b| {
+            let a_repl = a.replacement.trim_end_matches('"');
+            let a_is_dir = a_repl.ends_with('/') || a_repl.ends_with('\\');
+            let b_repl = b.replacement.trim_end_matches('"');
+            let b_is_dir = b_repl.ends_with('/') || b_repl.ends_with('\\');
+            match (a_is_dir, b_is_dir) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => a.display.cmp(&b.display),
+            }
+        });
                         
                         if !candidates.is_empty() {
                             return Ok((at_pos, candidates));
@@ -383,6 +385,32 @@ impl Completer for RfeHelper {
         // 注意：FilenameCompleter 在 Windows 下对包含空格的无引号路径，
         // 只会在结果开头添加双引号，不会添加结尾双引号。
         // 我们需要检测这种情况并补充结尾引号。
+        // 额外处理：Windows 下 FilenameCompleter 只识别反斜杠作为路径分隔符，
+        // 我们需要把用户输入的正斜杠临时替换成反斜杠获取补全结果，再替换回去
+        #[cfg(windows)]
+        let (result, _use_fwd_slash) = {
+            // 检查当前输入的路径部分是否使用正斜杠
+            let current_input = &line[..pos];
+            let use_fwd_slash = current_input.contains('/');
+            
+            if use_fwd_slash {
+                // 临时把所有正斜杠替换成反斜杠
+                let modified_line: String = line.chars().map(|c| if c == '/' { '\\' } else { c }).collect();
+                // 调用补全
+                let (start, candidates) = self.completer.complete(&modified_line, pos, ctx)?;
+                // 把补全结果中的反斜杠替换回正斜杠
+                let converted_candidates: Vec<Pair> = candidates.into_iter().map(|mut p| {
+                    p.replacement = p.replacement.chars().map(|c| if c == '\\' { '/' } else { c }).collect();
+                    p
+                }).collect();
+                ((start, converted_candidates), true)
+            } else {
+                // 正常调用
+                (self.completer.complete(line, pos, ctx)?, false)
+            }
+        };
+        
+        #[cfg(not(windows))]
         let result = self.completer.complete(line, pos, ctx)?;
 
         // 检查当前输入是否处于引号内
