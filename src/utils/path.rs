@@ -403,6 +403,36 @@ mod tests {
     }
 
     #[test]
+    fn test_expand_placeholder_with_subpath_forward_slash() {
+        let r = expand_pop_placeholders("cp {}/test.txt /tmp/", "C:\\Users\\q\\project");
+        assert_eq!(r.expanded, "cp C:\\Users\\q\\project/test.txt /tmp/");
+        assert_eq!(r.total_replacements, 1);
+    }
+
+    #[test]
+    fn test_expand_placeholder_with_subpath_backslash() {
+        let r = expand_pop_placeholders("cp {}\\test.txt /tmp/", "C:\\Users\\q\\project");
+        assert_eq!(r.expanded, "cp C:\\Users\\q\\project\\test.txt /tmp/");
+        assert_eq!(r.total_replacements, 1);
+    }
+
+    #[test]
+    fn test_expand_placeholder_with_pop_and_subpath() {
+        let r = expand_pop_placeholders("open {}.pop/test.txt", "C:\\Users\\q\\project\\src");
+        assert_eq!(r.expanded, "open C:\\Users\\q\\project/test.txt");
+        assert_eq!(r.total_replacements, 1);
+        assert_eq!(r.actual_pops, 1);
+    }
+
+    #[test]
+    fn test_expand_placeholder_with_multiple_dots_and_subpath() {
+        let r = expand_pop_placeholders("ls {}../test.txt", "C:\\Users\\q\\project\\src");
+        assert_eq!(r.expanded, "ls C:\\Users\\q/test.txt");
+        assert_eq!(r.total_replacements, 1);
+        assert_eq!(r.actual_pops, 2);
+    }
+
+    #[test]
     fn test_expand_consecutive_placeholders() {
         let r = expand_pop_placeholders("echo {}{}", "C:\\foo\\bar");
         assert_eq!(r.expanded, "echo C:\\foo\\barC:\\foo\\bar");

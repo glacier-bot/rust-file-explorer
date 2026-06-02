@@ -13,7 +13,7 @@ pub fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
     };
     if is_moe() {
         output.push_str(&format!(
-            "  {}               List contents of current directory ✨\n",
+            "  {}               List contents of current directory (with line numbers) ✨\n",
             "ls".truecolor(255, 182, 193).bold()
         ));
         output.push_str(&format!(
@@ -82,8 +82,12 @@ pub fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
             "cppwd".truecolor(255, 182, 193).bold()
         ));
         output.push_str(&format!(
-            "  {}  Copy file absolute path to clipboard 💗\n\n",
+            "  {}  Copy file absolute path to clipboard 💗\n",
             "cpf <file>".truecolor(255, 182, 193).bold()
+        ));
+        output.push_str(&format!(
+            "  {}       Copy path by ls line number ✨\n\n",
+            "cpf -r <line>".truecolor(255, 182, 193).bold()
         ));
 
         output.push_str(&format!(
@@ -97,6 +101,10 @@ pub fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
         output.push_str(&format!(
             "  {}     Change to specified directory 💫\n",
             "cd <path>".truecolor(255, 182, 193).bold()
+        ));
+        output.push_str(&format!(
+            "  {}  Change to directory by ls line number ✨\n",
+            "cd -r <line>".truecolor(255, 182, 193).bold()
         ));
         output.push_str(&format!(
             "  {}     Change back to previous directory 🔙\n",
@@ -114,10 +122,18 @@ pub fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
         ));
 
         output.push_str(&format!("  {}         Open file with default application / Open directory in file explorer 📂\n", "open <path>".truecolor(255, 182, 193).bold()));
+        output.push_str(&format!(
+            "  {}       Open file/directory by ls line number ✨\n",
+            "open -r <line>".truecolor(255, 182, 193).bold()
+        ));
 
         output.push_str(&format!(
             "  {}    Move file/folder to destination 📦\n",
             "mv <source> <dest>".truecolor(255, 182, 193).bold()
+        ));
+        output.push_str(&format!(
+            "  {}  Move file/folder by ls line number(s) ✨\n",
+            "mv -r <line> <dest> | mv <source> -r <line> | mv -r <line1> -r <line2>".truecolor(255, 182, 193).bold()
         ));
         output.push_str(&format!(
             "  {}    Copy file/folder to destination (preserves original) 💖\n\n",
@@ -285,7 +301,7 @@ pub fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
         ));
     } else {
         output.push_str(&format!(
-            "  {}               List contents of current directory\n",
+            "  {}               List contents of current directory (with line numbers)\n",
             "ls".cyan().bold()
         ));
         output.push_str(&format!(
@@ -358,8 +374,12 @@ pub fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
             "cppwd".cyan().bold()
         ));
         output.push_str(&format!(
-            "  {}  Copy file absolute path to clipboard\n\n",
+            "  {}  Copy file absolute path to clipboard\n",
             "cpf <file>".cyan().bold()
+        ));
+        output.push_str(&format!(
+            "  {}       Copy path by ls line number\n\n",
+            "cpf -r <line>".cyan().bold()
         ));
 
         output.push_str(&format!(
@@ -373,6 +393,10 @@ pub fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
         output.push_str(&format!(
             "  {}     Change to specified directory\n",
             "cd <path>".cyan().bold()
+        ));
+        output.push_str(&format!(
+            "  {}  Change to directory by ls line number\n",
+            "cd -r <line>".cyan().bold()
         ));
         output.push_str(&format!(
             "  {}     Change back to previous directory\n",
@@ -391,10 +415,18 @@ pub fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
             "  {}         Open file with default application / Open directory in file explorer\n",
             "open <path>".cyan().bold()
         ));
+        output.push_str(&format!(
+            "  {}       Open file/directory by ls line number\n",
+            "open -r <line>".cyan().bold()
+        ));
 
         output.push_str(&format!(
             "  {}    Move file/folder to destination\n",
             "mv <source> <dest>".cyan().bold()
+        ));
+        output.push_str(&format!(
+            "  {}  Move file/folder by ls line number(s)\n",
+            "mv -r <line> <dest> | mv <source> -r <line> | mv -r <line1> -r <line2>".cyan().bold()
         ));
         output.push_str(&format!(
             "  {}    Copy file/folder to destination (preserves original)\n\n",

@@ -9,6 +9,8 @@ use std::time::SystemTime;
 pub struct FileInfo {
     /// 文件名
     pub name: String,
+    /// 文件完整路径
+    pub full_path: String,
     /// 文件图标
     pub icon: &'static str,
     /// 文件颜色

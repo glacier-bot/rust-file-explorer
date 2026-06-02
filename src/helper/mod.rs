@@ -15,6 +15,7 @@ use std::time::Instant;
 use crate::cache::{cache_dir_entries, get_cached_dir_entries};
 use crate::managers::alias::AliasManager;
 use crate::managers::tag::TagManager;
+use crate::models::FileInfo;
 
 /// 判断路径是否包含需要用双引号包裹的特殊字符
 /// 包括：空格、英文括号 () [] {}、& | ; , ^ ! 等会被 shell 或命令解析器拆分的字符
@@ -46,6 +47,8 @@ pub struct RfeHelper {
     pub alias_manager: Arc<Mutex<AliasManager>>,
     /// 标签管理器
     pub tag_manager: Arc<Mutex<TagManager>>,
+    /// 最近一次ls的条目
+    pub last_ls_items: Arc<Mutex<Vec<FileInfo>>>,
 }
 
 impl Completer for RfeHelper {
@@ -61,13 +64,108 @@ impl Completer for RfeHelper {
     ) -> Result<(usize, Vec<Pair>), ReadlineError> {
         let current_word = &line[..pos];
         
+        // cd -r <行号>/<子路径> 补全
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 3 && parts[0] == "cd" && parts[1] == "-r" {
+            let path_part = parts[2];
+            // 检查是否包含/或\分割行号和子路径
+            if let Some(slash_pos) = path_part.find(|c: char| c == '/' || c == '\\') {
+                let line_num_str = &path_part[..slash_pos];
+                let original_sep = &path_part[slash_pos..=slash_pos]; // 保存用户使用的分隔符
+                let sub_path = &path_part[slash_pos+1..];
+                
+                // 解析行号
+                if let Ok(line_num) = line_num_str.parse::<usize>() {
+                    let items = self.last_ls_items.lock().unwrap();
+                    if line_num >= 1 && line_num <= items.len() {
+                        let item = &items[line_num - 1];
+                        if item.is_dir {
+                            let base_dir = std::path::Path::new(&item.full_path);
+                            
+                            // 解析子路径，确定要浏览的目录（支持Unix和Windows路径分隔符）
+                            let (dir_to_list, file_prefix) = if sub_path.ends_with('/') || sub_path.ends_with('\\') {
+                                (base_dir.join(sub_path), "")
+                            } else if let Some(last_slash) = sub_path.rfind(|c: char| c == '/' || c == '\\') {
+                                let dir_part = &sub_path[..last_slash];
+                                let file_part = &sub_path[last_slash+1..];
+                                (base_dir.join(dir_part), file_part)
+                            } else {
+                                (base_dir.to_path_buf(), sub_path)
+                            };
+                            
+                            // 读取目录内容并提供补全
+                            if dir_to_list.is_dir() {
+                                let mut candidates = Vec::new();
+                                if let Ok(dir_entries) = std::fs::read_dir(&dir_to_list) {
+                                    for entry in dir_entries.filter_map(|e| e.ok()) {
+                                        if let Some(name) = entry.file_name().to_str() {
+                                            let is_dir = entry.metadata().ok()
+                                                .map(|m| m.is_dir()).unwrap_or(false);
+                                            
+                                            // 过滤匹配前缀的条目
+                                            if !file_prefix.is_empty() && !name.starts_with(file_prefix) {
+                                                continue;
+                                            }
+                                            
+                                            // 构建补全路径，使用用户输入的分隔符
+                                            let replacement = if let Some(last_slash) = sub_path.rfind(|c: char| c == '/' || c == '\\') {
+                                                format!("{}{}{}{}{}", line_num_str, original_sep, &sub_path[..last_slash], original_sep, name)
+                                            } else {
+                                                format!("{}{}{}", line_num_str, original_sep, name)
+                                            };
+                                            
+                                            // 如果是目录，添加尾部斜杠（使用用户输入的分隔符）
+                                            let replacement_with_sep = if is_dir {
+                                                format!("{}{}", replacement, original_sep)
+                                            } else {
+                                                replacement.clone()
+                                            };
+                                            
+                                            // 统一引号策略
+                                            let final_replacement = if needs_quoting(&replacement_with_sep) {
+                                                quote_replacement(&replacement_with_sep)
+                                            } else {
+                                                replacement_with_sep
+                                            };
+                                            
+                                            candidates.push(Pair {
+                                                display: name.to_string(),
+                                                replacement: final_replacement,
+                                            });
+                                        }
+                                    }
+                                }
+                                
+                                // 按目录在前、文件在后排序
+                                candidates.sort_by(|a, b| {
+                                    let a_is_dir = a.replacement.trim_end_matches('"').ends_with('/');
+                                    let b_is_dir = b.replacement.trim_end_matches('"').ends_with('/');
+                                    match (a_is_dir, b_is_dir) {
+                                        (true, false) => std::cmp::Ordering::Less,
+                                        (false, true) => std::cmp::Ordering::Greater,
+                                        _ => a.display.cmp(&b.display),
+                                    }
+                                });
+                                
+                                if !candidates.is_empty() {
+                                    let start_pos = pos - path_part.len();
+                                    return Ok((start_pos, candidates));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
         // 路径别名补全 - 支持 @alias/path 的层级补全
         if let Some(at_pos) = current_word.rfind('@') {
             let after_at = &current_word[at_pos + 1..];
             
-            // 检查是否包含路径分隔符（需要子路径补全）
-            if let Some(sep_pos) = after_at.find('/') {
+            // 检查是否包含路径分隔符（/或\），需要子路径补全
+            if let Some(sep_pos) = after_at.find(|c: char| c == '/' || c == '\\') {
                 let alias_name = &after_at[..sep_pos];
+                let original_sep = &after_at[sep_pos..=sep_pos]; // 保存用户使用的分隔符
                 let sub_path = &after_at[sep_pos + 1..];
                 
                 // 获取别名对应的真实路径
@@ -75,10 +173,10 @@ impl Completer for RfeHelper {
                 if let Some(alias_path) = alias_manager.get(alias_name) {
                     let base_path = PathBuf::from(alias_path);
                     
-                    // 解析子路径，确定要浏览的目录
-                    let (dir_to_list, file_prefix) = if sub_path.ends_with('/') {
+                    // 解析子路径，确定要浏览的目录（支持两种分隔符）
+                    let (dir_to_list, file_prefix) = if sub_path.ends_with('/') || sub_path.ends_with('\\') {
                         (base_path.join(sub_path), "")
-                    } else if let Some(last_sep) = sub_path.rfind('/') {
+                    } else if let Some(last_sep) = sub_path.rfind(|c: char| c == '/' || c == '\\') {
                         let dir_part = &sub_path[..last_sep];
                         let file_part = &sub_path[last_sep + 1..];
                         (base_path.join(dir_part), file_part)
@@ -129,16 +227,16 @@ impl Completer for RfeHelper {
                                 break;
                             }
                             
-                            // 构建补全路径
-                            let replacement = if let Some(last_sep) = sub_path.rfind('/') {
-                                format!("@{}/{}/{}", alias_name, &sub_path[..last_sep], name)
+                            // 构建补全路径，使用用户输入的分隔符
+                            let replacement = if let Some(last_sep) = sub_path.rfind(|c: char| c == '/' || c == '\\') {
+                                format!("@{}{}{}{}{}", alias_name, original_sep, &sub_path[..last_sep], original_sep, name)
                             } else {
-                                format!("@{}/{}", alias_name, name)
+                                format!("@{}{}{}", alias_name, original_sep, name)
                             };
                             
-                            // 如果是目录，添加尾部斜杠
+                            // 如果是目录，添加尾部斜杠（使用用户输入的分隔符）
                             let replacement_with_sep = if is_dir {
-                                format!("{}/", replacement)
+                                format!("{}{}", replacement, original_sep)
                             } else {
                                 replacement.clone()
                             };
@@ -398,6 +496,7 @@ mod tests {
             completer: FilenameCompleter::new(),
             alias_manager: Arc::new(Mutex::new(AliasManager::new().unwrap())),
             tag_manager: Arc::new(Mutex::new(TagManager::new().unwrap())),
+            last_ls_items: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -925,5 +1024,153 @@ mod tests {
             assert!(replacement.starts_with('"') && replacement.ends_with("/\""), "补全结果应为\"te sts/\"，不会有双重引号");
             assert!(!replacement.starts_with("\"\""), "不应出现双重开头引号");
         }
+    }
+
+    /// 测试 cd -r 使用正斜杠和反斜杠的补全功能
+    #[test]
+    fn test_cd_r_with_both_separators() {
+        use std::fs;
+        let helper = create_helper();
+        let history = MemHistory::default();
+        let ctx = Context::new(&history);
+
+        // 创建临时目录结构
+        let tmp_root = std::env::temp_dir().join("rfe_test_cd_r_sep");
+        let _ = fs::remove_dir_all(&tmp_root);
+        fs::create_dir_all(&tmp_root).unwrap();
+        let sub_dir = tmp_root.join("test_subdir");
+        fs::create_dir_all(&sub_dir).unwrap();
+        fs::write(sub_dir.join("inner_file.txt"), "test").unwrap();
+
+        // 填充 last_ls_items
+        {
+            let mut items = helper.last_ls_items.lock().unwrap();
+            items.push(crate::models::FileInfo {
+                name: "tmp_root".to_string(),
+                full_path: tmp_root.to_string_lossy().to_string(),
+                icon: "📁",
+                color: colored::Color::Blue,
+                size: 0,
+                created: None,
+                modified: std::time::SystemTime::now(),
+                is_dir: true,
+                tags: vec![],
+            });
+        }
+
+        // 测试正斜杠: cd -r 1/
+        let line_fwd = "cd -r 1/";
+        let result_fwd = helper.complete(line_fwd, line_fwd.len(), &ctx).unwrap();
+        assert!(!result_fwd.1.is_empty(), "使用正斜杠应该有补全结果");
+
+        // 检查补全是否使用正斜杠
+        let subdir_cand_fwd = result_fwd.1.iter().find(|c| c.display == "test_subdir");
+        assert!(subdir_cand_fwd.is_some(), "应该找到test_subdir");
+        assert!(subdir_cand_fwd.unwrap().replacement.contains("1/"), "补全结果应使用正斜杠");
+
+        // 测试反斜杠: cd -r 1\
+        let line_back = r"cd -r 1\";
+        let result_back = helper.complete(line_back, line_back.len(), &ctx).unwrap();
+        assert!(!result_back.1.is_empty(), "使用反斜杠应该有补全结果");
+
+        // 检查补全是否使用反斜杠
+        let subdir_cand_back = result_back.1.iter().find(|c| c.display == "test_subdir");
+        assert!(subdir_cand_back.is_some(), "应该找到test_subdir");
+        assert!(subdir_cand_back.unwrap().replacement.contains(r"1\"), "补全结果应使用反斜杠");
+
+        // 清理
+        let _ = fs::remove_dir_all(&tmp_root);
+    }
+
+    /// 测试 @alias 子路径补全使用正斜杠和反斜杠
+    #[test]
+    fn test_alias_completion_with_both_separators() {
+        use std::fs;
+        let helper = create_helper();
+        let history = MemHistory::default();
+        let ctx = Context::new(&history);
+
+        // 创建临时目录结构
+        let tmp_root = std::env::temp_dir().join("rfe_test_alias_sep");
+        let _ = fs::remove_dir_all(&tmp_root);
+        fs::create_dir_all(&tmp_root).unwrap();
+        let sub_dir = tmp_root.join("alias_subdir");
+        fs::create_dir_all(&sub_dir).unwrap();
+        fs::write(sub_dir.join("alias_file.txt"), "test").unwrap();
+
+        // 注册别名
+        {
+            let mut mgr = helper.alias_manager.lock().unwrap();
+            mgr.aliases.insert(
+                "test_alias".to_string(),
+                tmp_root.to_string_lossy().to_string(),
+            );
+        }
+
+        // 测试正斜杠: cd @test_alias/
+        let line_fwd = "cd @test_alias/";
+        let result_fwd = helper.complete(line_fwd, line_fwd.len(), &ctx).unwrap();
+        assert!(!result_fwd.1.is_empty(), "使用正斜杠的别名补全应该有结果");
+
+        let subdir_cand_fwd = result_fwd.1.iter().find(|c| c.display == "alias_subdir");
+        assert!(subdir_cand_fwd.is_some(), "应该找到alias_subdir");
+        assert!(subdir_cand_fwd.unwrap().replacement.contains("@test_alias/"), "应使用正斜杠");
+
+        // 测试反斜杠: cd @test_alias\
+        let line_back = r"cd @test_alias\";
+        let result_back = helper.complete(line_back, line_back.len(), &ctx).unwrap();
+        assert!(!result_back.1.is_empty(), "使用反斜杠的别名补全应该有结果");
+
+        let subdir_cand_back = result_back.1.iter().find(|c| c.display == "alias_subdir");
+        assert!(subdir_cand_back.is_some(), "应该找到alias_subdir");
+        assert!(subdir_cand_back.unwrap().replacement.contains(r"@test_alias\"), "应使用反斜杠");
+
+        // 清理
+        let _ = fs::remove_dir_all(&tmp_root);
+        let mut mgr = helper.alias_manager.lock().unwrap();
+        mgr.aliases.remove("test_alias");
+    }
+
+    /// 测试 cd -r 子路径补全的深层目录
+    #[test]
+    fn test_cd_r_deep_subpath_completion() {
+        use std::fs;
+        let helper = create_helper();
+        let history = MemHistory::default();
+        let ctx = Context::new(&history);
+
+        // 创建深层目录结构
+        let tmp_root = std::env::temp_dir().join("rfe_test_cd_r_deep");
+        let _ = fs::remove_dir_all(&tmp_root);
+        let deep_dir = tmp_root.join("level1").join("level2").join("level3");
+        fs::create_dir_all(&deep_dir).unwrap();
+        fs::write(deep_dir.join("deep_file.txt"), "test").unwrap();
+
+        // 填充 last_ls_items
+        {
+            let mut items = helper.last_ls_items.lock().unwrap();
+            items.push(crate::models::FileInfo {
+                name: "deep_root".to_string(),
+                full_path: tmp_root.to_string_lossy().to_string(),
+                icon: "📁",
+                color: colored::Color::Blue,
+                size: 0,
+                created: None,
+                modified: std::time::SystemTime::now(),
+                is_dir: true,
+                tags: vec![],
+            });
+        }
+
+        // 测试深层路径，混合使用分隔符也能处理
+        let line = "cd -r 1/level1/level2/";
+        let result = helper.complete(line, line.len(), &ctx).unwrap();
+        assert!(!result.1.is_empty(), "深层路径补全应该有结果");
+
+        let level3_cand = result.1.iter().find(|c| c.display == "level3");
+        assert!(level3_cand.is_some(), "应该找到level3目录");
+
+        // 清理
+        let _ = fs::remove_dir_all(&tmp_root);
     }
 }

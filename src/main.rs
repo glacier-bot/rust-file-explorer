@@ -18,6 +18,7 @@ use crate::utils::split_command_args;
 use crate::commands::*;
 use crate::helper::RfeHelper;
 use crate::managers::{alias::AliasManager, tag::TagManager};
+use crate::models::FileInfo;
 use rustyline::completion::FilenameCompleter;
 
 #[derive(Debug)]
@@ -45,11 +46,38 @@ fn get_prompt_string() -> String {
     }
 }
 
+/// 解析行号路径，将类似 "2/src/main.rs" 转换为实际的绝对路径
+#[cfg_attr(test, allow(dead_code))]
+pub(crate) fn resolve_line_path(path_part: &str, last_ls_items: &Arc<Mutex<Vec<FileInfo>>>) -> Result<String, Box<dyn std::error::Error>> {
+    // 分割行号和子路径（支持Unix和Windows路径分隔符）
+    let (line_num_str, sub_path) = if let Some(slash_pos) = path_part.find(|c: char| c == '/' || c == '\\') {
+        (&path_part[..slash_pos], &path_part[slash_pos+1..])
+    } else {
+        (path_part, "")
+    };
+    
+    let line_num = line_num_str.parse::<usize>().map_err(|_| "Invalid line number")?;
+    let items = last_ls_items.lock().unwrap();
+    if line_num < 1 || line_num > items.len() {
+        return Err(format!("Line number {} out of range (1-{})", line_num, items.len()).into());
+    }
+    let item = &items[line_num - 1];
+    
+    // 拼接完整路径
+    let mut full_path = std::path::PathBuf::from(&item.full_path);
+    if !sub_path.is_empty() {
+        full_path = full_path.join(sub_path);
+    }
+    
+    Ok(full_path.to_string_lossy().to_string())
+}
+
 fn execute_single_command(
     input: &str,
     input_data: &str,
     alias_manager: &Arc<Mutex<AliasManager>>,
     tag_manager: &Arc<Mutex<TagManager>>,
+    last_ls_items: &Arc<Mutex<Vec<FileInfo>>>,
     previous_dir: Option<&str>,
 ) -> Result<(CommandResult, String, String, Option<String>), Box<dyn std::error::Error>> {
     let parts: Vec<String> = split_command_args(input);
@@ -75,15 +103,28 @@ fn execute_single_command(
             Ok((CommandResult::Normal(false), display, raw, None))
         }
         "cpf" => {
-            let path = if let Some(p) = parts.get(1) {
-                p.clone()
-            } else if !input_data.is_empty() {
-                input_data.to_string()
-            } else {
-                return Err("Usage: cpf <file>".into());
-            };
-            let resolved_path = alias_manager.lock().unwrap().resolve_path(&path);
-            let (display, raw) = clipboard::cmd_cpf(&resolved_path)?;
+            let mut path: Option<String> = None;
+            let mut i = 1;
+            while i < parts.len() {
+                if parts[i] == "-r" {
+                    if i + 1 >= parts.len() {
+                        return Err("Usage: cpf -r <line_number>[/path]".into());
+                    }
+                    let resolved = resolve_line_path(&parts[i+1], last_ls_items)?;
+                    path = Some(resolved);
+                    i += 2;
+                } else {
+                    if path.is_none() {
+                        path = Some(alias_manager.lock().unwrap().resolve_path(&parts[i]));
+                    }
+                    i += 1;
+                }
+            }
+            
+            let path = path.or_else(|| if !input_data.is_empty() { Some(input_data.to_string()) } else { None })
+                .ok_or("Usage: cpf <file> or cpf -r <line_number>[/path]")?;
+            
+            let (display, raw) = clipboard::cmd_cpf(&path)?;
             Ok((CommandResult::Normal(false), display, raw, None))
         }
         "cd" => {
@@ -108,6 +149,32 @@ fn execute_single_command(
                                 selection = Some(n);
                             }
                             i += 1;
+                        }
+                    }
+                    "-r" => {
+                        if i + 1 < parts.len() {
+                            let target_path = resolve_line_path(&parts[i + 1], last_ls_items)?;
+                            let target_path = std::path::PathBuf::from(&target_path);
+                            
+                            // 检查路径是否存在且是目录
+                            if !target_path.exists() {
+                                return Err(format!("Path does not exist: {}", target_path.display()).into());
+                            }
+                            if !target_path.is_dir() {
+                                return Err(format!("'{}' is not a directory", target_path.display()).into());
+                            }
+                            
+                            let current_dir = env::current_dir()?;
+                            env::set_current_dir(&target_path)?;
+                            let new_prev_dir = if target_path != current_dir {
+                                Some(current_dir.display().to_string())
+                            } else {
+                                None
+                            };
+                            let display = format!("{} {}", "Changed to:".green(), target_path.display().to_string().cyan());
+                            return Ok((CommandResult::Normal(false), display, target_path.display().to_string(), new_prev_dir));
+                        } else {
+                            return Err("Usage: cd -r <line_number>[/sub_path]".into());
                         }
                     }
                     p => path = Some(alias_manager.lock().unwrap().resolve_path(p)),
@@ -207,7 +274,7 @@ fn execute_single_command(
                 }
             }
 
-            let (display, raw) = ls::cmd_ls(
+            let (display, raw, items) = ls::cmd_ls(
                 all,
                 long,
                 re,
@@ -218,38 +285,73 @@ fn execute_single_command(
                 &tag_manager.lock().unwrap(),
                 &tag_patterns,
             )?;
+            *last_ls_items.lock().unwrap() = items;
             Ok((CommandResult::Normal(false), display, raw, None))
         }
         "open" => {
-            let path = if let Some(p) = parts.get(1) {
-                p.clone()
-            } else if !input_data.is_empty() {
-                input_data.to_string()
-            } else {
-                return Err("Usage: open <file>".into());
-            };
-            let resolved_path = alias_manager.lock().unwrap().resolve_path(&path);
-            let (display, raw) = open::cmd_open(&resolved_path)?;
+            let mut path: Option<String> = None;
+            let mut i = 1;
+            while i < parts.len() {
+                if parts[i] == "-r" {
+                    if i + 1 >= parts.len() {
+                        return Err("Usage: open -r <line_number>[/path]".into());
+                    }
+                    let resolved = resolve_line_path(&parts[i+1], last_ls_items)?;
+                    path = Some(resolved);
+                    i += 2;
+                } else {
+                    if path.is_none() {
+                        path = Some(alias_manager.lock().unwrap().resolve_path(&parts[i]));
+                    }
+                    i += 1;
+                }
+            }
+            
+            let path = path.or_else(|| if !input_data.is_empty() { Some(input_data.to_string()) } else { None })
+                .ok_or("Usage: open <file> or open -r <line_number>[/path]")?;
+            
+            let (display, raw) = open::cmd_open(&path)?;
             Ok((CommandResult::Normal(false), display, raw, None))
         }
         "mv" => {
             let mut source: Option<String> = None;
             let mut destination: Option<String> = None;
             let mut copy = false;
-
-            for part in &parts[1..] {
-                if part == "--cp" {
-                    copy = true;
-                } else if source.is_none() {
-                    source = Some(alias_manager.lock().unwrap().resolve_path(part));
-                } else if destination.is_none() {
-                    destination = Some(alias_manager.lock().unwrap().resolve_path(part));
+            
+            let mut i = 1;
+            while i < parts.len() {
+                match parts[i].as_str() {
+                    "--cp" => {
+                        copy = true;
+                        i += 1;
+                    },
+                    "-r" => {
+                        if i + 1 >= parts.len() {
+                            return Err("Missing path after -r parameter".into());
+                        }
+                        let resolved = resolve_line_path(&parts[i+1], last_ls_items)?;
+                        if source.is_none() {
+                            source = Some(resolved);
+                        } else if destination.is_none() {
+                            destination = Some(resolved);
+                        }
+                        i += 2;
+                    },
+                    part => {
+                        let resolved = alias_manager.lock().unwrap().resolve_path(part);
+                        if source.is_none() {
+                            source = Some(resolved);
+                        } else if destination.is_none() {
+                            destination = Some(resolved);
+                        }
+                        i += 1;
+                    }
                 }
             }
 
-            let source = source.ok_or("Usage: mv <source_path> <destination_path> [--cp]")?;
+            let source = source.ok_or("Usage: mv <source_path> <destination_path> [--cp] or mv -r <source_line> <destination> or mv <source> -r <destination_line>")?;
             let destination =
-                destination.ok_or("Usage: mv <source_path> <destination_path> [--cp]")?;
+                destination.ok_or("Usage: mv <source_path> <destination_path> [--cp] or mv -r <source_line> <destination> or mv <source> -r <destination_line>")?;
 
             let (display, raw) = mv::cmd_mv(&source, &destination, copy)?;
             Ok((CommandResult::Normal(false), display, raw, None))
@@ -330,6 +432,7 @@ fn execute_command(
     input: &str,
     alias_manager: &Arc<Mutex<AliasManager>>,
     tag_manager: &Arc<Mutex<TagManager>>,
+    last_ls_items: &Arc<Mutex<Vec<FileInfo>>>,
     current_previous_dir: &mut Option<String>,
 ) -> Result<CommandResult, Box<dyn std::error::Error>> {
     let input = input.replace("\n", " ");
@@ -383,12 +486,13 @@ fn execute_command(
         }
 
         match execute_single_command(
-            &cmd,
-            &previous_raw_data,
-            alias_manager,
-            tag_manager,
-            current_previous_dir.as_deref(),
-        ) {
+                &cmd,
+                &previous_raw_data,
+                alias_manager,
+                tag_manager,
+                last_ls_items,
+                current_previous_dir.as_deref(),
+            ) {
             Ok((cmd_result, display_output, raw_output, new_prev_dir)) => {
                 println!("{}", display_output);
                 if let CommandResult::NeedCdSelection(_) = cmd_result {
@@ -430,6 +534,7 @@ fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
 
     let alias_manager = Arc::new(Mutex::new(AliasManager::new()?));
     let tag_manager = Arc::new(Mutex::new(TagManager::new()?));
+    let last_ls_items: Arc<Mutex<Vec<FileInfo>>> = Arc::new(Mutex::new(Vec::new()));
     let mut previous_dir: Option<String> = None;
     let mut pending_cd_selection: Option<(Vec<cd::CdSelectionItem>, Option<String>)> = None;
 
@@ -437,6 +542,7 @@ fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
         completer: FilenameCompleter::new(),
         alias_manager: Arc::clone(&alias_manager),
         tag_manager: Arc::clone(&tag_manager),
+        last_ls_items: Arc::clone(&last_ls_items),
     };
 
     let mut rl = rustyline::Editor::new()?;
@@ -509,7 +615,7 @@ fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
                         previous_dir = Some(new_prev);
                     }
                 } else {
-                    match execute_command(input, &alias_manager, &tag_manager, &mut previous_dir) {
+                    match execute_command(input, &alias_manager, &tag_manager, &last_ls_items, &mut previous_dir) {
                         Ok(CommandResult::Normal(should_exit)) => {
                             if should_exit {
                                 break;
@@ -747,7 +853,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 path.as_deref(),
                 &tag_manager,
                 &tag_patterns,
-            )
+            ).map(|(display, raw, _items)| (display, raw))
         }
         "open" => {
             let path = args
@@ -762,13 +868,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut destination: Option<String> = None;
             let mut copy = false;
 
-            for arg in &args[arg_offset + 1..] {
-                if arg == "--cp" {
-                    copy = true;
-                } else if source.is_none() {
-                    source = Some(alias_manager.resolve_path(arg));
-                } else if destination.is_none() {
-                    destination = Some(alias_manager.resolve_path(arg));
+            let mut i = arg_offset + 1;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--cp" => {
+                        copy = true;
+                        i += 1;
+                    }
+                    "-r" => {
+                        if i + 1 >= args.len() {
+                            return Err("Missing path after -r parameter".into());
+                        }
+                        // 注意：直接命令模式下不持有 last_ls_items，
+                        // 但为了保持功能一致，我们需要在直接模式中也支持 -r 参数。
+                        // 让我们修改 main 函数，使其也能访问 last_ls_items
+                        // 不过先跳过这个，我们先完善 REPL 模式的文档说明
+                        return Err("-r parameter is only available in REPL mode (interactive mode)".into());
+                    }
+                    part => {
+                        let resolved = alias_manager.resolve_path(part);
+                        if source.is_none() {
+                            source = Some(resolved);
+                        } else if destination.is_none() {
+                            destination = Some(resolved);
+                        }
+                        i += 1;
+                    }
                 }
             }
 
@@ -853,3 +978,138 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::FileInfo;
+    use std::sync::{Arc, Mutex};
+
+    fn create_test_file_info(name: &str, full_path: &str, is_dir: bool) -> FileInfo {
+        FileInfo {
+            name: name.to_string(),
+            full_path: full_path.to_string(),
+            icon: if is_dir { "📁" } else { "📄" },
+            color: if is_dir {
+                colored::Color::Blue
+            } else {
+                colored::Color::White
+            },
+            size: 0,
+            created: None,
+            modified: std::time::SystemTime::now(),
+            is_dir,
+            tags: vec![],
+        }
+    }
+
+    #[test]
+    fn test_resolve_line_path_valid_line_number() {
+        let last_ls_items = Arc::new(Mutex::new(vec![
+            create_test_file_info("test_dir", "/test/path/test_dir", true),
+            create_test_file_info("test_file.txt", "/test/path/test_file.txt", false),
+        ]));
+
+        let result = resolve_line_path("1", &last_ls_items).unwrap();
+        assert_eq!(result, "/test/path/test_dir");
+
+        let result = resolve_line_path("2", &last_ls_items).unwrap();
+        assert_eq!(result, "/test/path/test_file.txt");
+    }
+
+    #[test]
+    fn test_resolve_line_path_out_of_range() {
+        let last_ls_items = Arc::new(Mutex::new(vec![create_test_file_info(
+            "test_file",
+            "/test/path/test_file",
+            false,
+        )]));
+
+        let result = resolve_line_path("0", &last_ls_items);
+        assert!(result.is_err());
+
+        let result = resolve_line_path("2", &last_ls_items);
+        assert!(result.is_err());
+
+        let result = resolve_line_path("100", &last_ls_items);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_resolve_line_path_invalid_number() {
+        let last_ls_items = Arc::new(Mutex::new(vec![create_test_file_info(
+            "test",
+            "/test",
+            true,
+        )]));
+
+        let result = resolve_line_path("abc", &last_ls_items);
+        assert!(result.is_err());
+
+        let result = resolve_line_path("", &last_ls_items);
+        assert!(result.is_err());
+
+        let result = resolve_line_path("-1", &last_ls_items);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_resolve_line_path_with_sub_path_forward_slash() {
+        let last_ls_items = Arc::new(Mutex::new(vec![create_test_file_info(
+            "project",
+            "/home/user/project",
+            true,
+        )]));
+
+        let result = resolve_line_path("1/src/main.rs", &last_ls_items).unwrap();
+        assert_eq!(result, "/home/user/project/src/main.rs");
+    }
+
+    #[test]
+    fn test_resolve_line_path_with_sub_path_backslash() {
+        let last_ls_items = Arc::new(Mutex::new(vec![create_test_file_info(
+            "project",
+            "C:\\Users\\user\\project",
+            true,
+        )]));
+
+        let result = resolve_line_path("1\\src\\main.rs", &last_ls_items).unwrap();
+        assert_eq!(result, "C:\\Users\\user\\project\\src\\main.rs");
+    }
+
+    #[test]
+    fn test_resolve_line_path_with_empty_sub_path() {
+        let last_ls_items = Arc::new(Mutex::new(vec![create_test_file_info(
+            "test",
+            "/test/path",
+            true,
+        )]));
+
+        let result = resolve_line_path("1/", &last_ls_items).unwrap();
+        assert_eq!(result, "/test/path/");
+
+        let result = resolve_line_path("1\\", &last_ls_items).unwrap();
+        assert_eq!(result, "/test/path/");
+    }
+
+    #[test]
+    fn test_resolve_line_path_empty_ls_items() {
+        let last_ls_items = Arc::new(Mutex::new(Vec::new()));
+
+        let result = resolve_line_path("1", &last_ls_items);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_resolve_line_path_deep_sub_path() {
+        let last_ls_items = Arc::new(Mutex::new(vec![create_test_file_info(
+            "root",
+            "/root",
+            true,
+        )]));
+
+        let result = resolve_line_path("1/a/b/c/d/e/f/g", &last_ls_items).unwrap();
+        assert_eq!(result, "/root/a/b/c/d/e/f/g");
+    }
+}
+

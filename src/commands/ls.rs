@@ -54,7 +54,7 @@ pub fn get_file_icon_and_color(path: &Path, metadata: &std::fs::Metadata) -> (&'
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: bool, recursive: bool, path: Option<&str>, tag_manager: &TagManager, tag_patterns: &[Regex]) -> Result<(String, String), Box<dyn std::error::Error>> {
+pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: bool, recursive: bool, path: Option<&str>, tag_manager: &TagManager, tag_patterns: &[Regex]) -> Result<(String, String, Vec<FileInfo>), Box<dyn std::error::Error>> {
     let mut output = String::new();
     let mut files: Vec<FileInfo> = Vec::new();
     let mut dirs: Vec<FileInfo> = Vec::new();
@@ -135,16 +135,18 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
                                 Vec::new()
                             };
 
-                            let file_info = FileInfo {
-                                name,
-                                icon,
-                                color,
-                                size: meta.len(),
-                                created,
-                                modified,
-                                is_dir: meta.is_dir(),
-                                tags,
-                            };
+                            let full_path = path.to_string_lossy().to_string();
+                        let file_info = FileInfo {
+                            name,
+                            full_path,
+                            icon,
+                            color,
+                            size: meta.len(),
+                            created,
+                            modified,
+                            is_dir: meta.is_dir(),
+                            tags,
+                        };
 
                             if meta.is_dir() {
                                 dirs.push(file_info);
@@ -227,16 +229,18 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
                                 Vec::new()
                             };
 
-                            let file_info = FileInfo {
-                                name,
-                                icon,
-                                color,
-                                size: meta.len(),
-                                created,
-                                modified,
-                                is_dir: meta.is_dir(),
-                                tags,
-                            };
+                            let full_path = path.to_string_lossy().to_string();
+                        let file_info = FileInfo {
+                            name,
+                            full_path,
+                            icon,
+                            color,
+                            size: meta.len(),
+                            created,
+                            modified,
+                            is_dir: meta.is_dir(),
+                            tags,
+                        };
 
                             if meta.is_dir() {
                                 dirs.push(file_info);
@@ -245,18 +249,20 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
                             }
                         }
                         Err(_) => {
-                            let file_info = FileInfo {
-                                name,
-                                icon: "❓",
-                                color: Color::Red,
-                                size: 0,
-                                created: None,
-                                modified: SystemTime::now(),
-                                is_dir: false,
-                                tags: Vec::new(),
-                            };
-                            files.push(file_info);
-                        }
+                        let full_path = path.to_string_lossy().to_string();
+                        let file_info = FileInfo {
+                            name,
+                            full_path,
+                            icon: "❓",
+                            color: Color::Red,
+                            size: 0,
+                            created: None,
+                            modified: SystemTime::now(),
+                            is_dir: false,
+                            tags: Vec::new(),
+                        };
+                        files.push(file_info);
+                    }
                     }
                 }
                 Ok(())
@@ -287,8 +293,10 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
                             Vec::new()
                         };
                         
+                        let full_path = path.to_string_lossy().to_string();
                         let file_info = FileInfo {
                             name,
+                            full_path,
                             icon,
                             color,
                             size: meta.len(),
@@ -305,8 +313,10 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
                         }
                     }
                     Err(_) => {
+                        let full_path = path.to_string_lossy().to_string();
                         let file_info = FileInfo {
                             name,
+                            full_path,
                             icon: "❓",
                             color: Color::Red,
                             size: 0,
@@ -350,12 +360,13 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
         let truncate_name_width = name_width.saturating_sub(4);
 
         if show_tags {
-            let widths = [name_width, created_width, modified_width, size_width, tags_width];
+            let widths = [3, name_width, created_width, modified_width, size_width, tags_width];
             let separator = make_separator(&widths).bright_black();
 
             output.push_str(&format!("{}\n", separator));
             output.push_str(&format!(
-                "| {} | {} | {} | {} | {} |\n",
+                "| {:^3} | {} | {} | {} | {} | {} |\n",
+                "#".bright_white().bold(),
                 center_text("Name", name_width).bright_white().bold(),
                 center_text("Created Date", created_width).bright_white().bold(),
                 center_text("Modified Date", modified_width).bright_white().bold(),
@@ -364,7 +375,8 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
             ));
             output.push_str(&format!("{}\n", separator));
 
-            for item in &all_items {
+            for (idx, item) in all_items.iter().enumerate() {
+                let line_num = idx + 1;
                 let created_str = item
                     .created
                     .map_or("N/A".to_string(), format_time_absolute);
@@ -387,7 +399,8 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
                 let padded_tags = pad_to_width(&truncate_string(&tags_str, tags_width), tags_width);
 
                 output.push_str(&format!(
-                    "| {} | {} | {} | {} | {} |\n",
+                    "| {:3} | {} | {} | {} | {} | {} |\n",
+                    line_num,
                     padded_name.color(item.color).bold(),
                     pad_to_width(&truncate_string(&created_str, created_width), created_width).bright_cyan(),
                     pad_to_width(&truncate_string(&modified_str, modified_width), modified_width).bright_magenta(),
@@ -398,12 +411,13 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
 
             output.push_str(&format!("{}\n", separator));
         } else {
-            let widths = [name_width, created_width, modified_width, size_width];
+            let widths = [3, name_width, created_width, modified_width, size_width];
             let separator = make_separator(&widths).bright_black();
 
             output.push_str(&format!("{}\n", separator));
             output.push_str(&format!(
-                "| {} | {} | {} | {} |\n",
+                "| {:^3} | {} | {} | {} | {} |\n",
+                "#".bright_white().bold(),
                 center_text("Name", name_width).bright_white().bold(),
                 center_text("Created Date", created_width).bright_white().bold(),
                 center_text("Modified Date", modified_width).bright_white().bold(),
@@ -411,7 +425,8 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
             ));
             output.push_str(&format!("{}\n", separator));
 
-            for item in &all_items {
+            for (idx, item) in all_items.iter().enumerate() {
+                let line_num = idx + 1;
                 let created_str = item
                     .created
                     .map_or("N/A".to_string(), format_time_absolute);
@@ -428,7 +443,8 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
                 let padded_name = format!("{}{}", display_text, padding);
 
                 output.push_str(&format!(
-                    "| {} | {} | {} | {} |\n",
+                    "| {:3} | {} | {} | {} | {} |\n",
+                    line_num,
                     padded_name.color(item.color).bold(),
                     pad_to_width(&truncate_string(&created_str, created_width), created_width).bright_cyan(),
                     pad_to_width(&truncate_string(&modified_str, modified_width), modified_width).bright_magenta(),
@@ -439,13 +455,14 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
             output.push_str(&format!("{}\n", separator));
         }
     } else {
-        for item in &all_items {
+        for (idx, item) in all_items.iter().enumerate() {
+            let line_num = idx + 1;
             let display_name = truncate_string(&item.name, 50);
             if show_tags && !item.tags.is_empty() {
                 let tags_str = format!(" [{}]", item.tags.join(", "));
-                output.push_str(&format!("  {} {}{}\n", item.icon, display_name.color(item.color).bold(), tags_str.bright_yellow()));
+                output.push_str(&format!("{:3}. {} {}{}\n", line_num, item.icon, display_name.color(item.color).bold(), tags_str.bright_yellow()));
             } else {
-                output.push_str(&format!("  {} {}\n", item.icon, display_name.color(item.color).bold()));
+                output.push_str(&format!("{:3}. {} {}\n", line_num, item.icon, display_name.color(item.color).bold()));
             }
         }
     }
@@ -484,5 +501,5 @@ pub fn cmd_ls(all: bool, long: bool, re: bool, re_insensitive: bool, show_tags: 
         }
     };
 
-    Ok((output, raw_path))
+    Ok((output, raw_path, all_items))
 }
