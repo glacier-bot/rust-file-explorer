@@ -32,7 +32,7 @@ pub fn calculate_column_widths(term_width: usize, show_tags: bool) -> (usize, us
     if show_tags {
         const TOTAL_PARTS: usize = 118;
         let name = (content_total * 41 / TOTAL_PARTS).max(MIN_NAME);
-        let created = (content_total * 21 / TOTAL_PARTS).max(MIN_DATE);
+        let created = (content_total * 21 / TOTAL_PARTS).saturating_sub(4).max(MIN_DATE);
         let modified = (content_total * 21 / TOTAL_PARTS).max(MIN_DATE);
         let size = (content_total * 12 / TOTAL_PARTS).max(MIN_SIZE);
         let tags = (content_total * 23 / TOTAL_PARTS).max(MIN_TAGS);
@@ -48,7 +48,7 @@ pub fn calculate_column_widths(term_width: usize, show_tags: bool) -> (usize, us
     } else {
         const TOTAL_PARTS: usize = 95;
         let name = (content_total * 41 / TOTAL_PARTS).max(MIN_NAME);
-        let created = (content_total * 21 / TOTAL_PARTS).max(MIN_DATE);
+        let created = (content_total * 21 / TOTAL_PARTS).saturating_sub(4).max(MIN_DATE);
         let modified = (content_total * 21 / TOTAL_PARTS).max(MIN_DATE);
         let size = (content_total * 12 / TOTAL_PARTS).max(MIN_SIZE);
 
