@@ -10,23 +10,17 @@ pub fn cmd_open(path: &str) -> Result<(String, String), Box<dyn std::error::Erro
     }
 
     let plain_path = target.display().to_string();
-    
+
     if target.is_dir() {
         #[cfg(target_os = "windows")]
-        Command::new("explorer.exe")
-            .arg(&target)
-            .spawn()?;
-        
+        Command::new("explorer.exe").arg(&target).spawn()?;
+
         #[cfg(target_os = "macos")]
-        Command::new("open")
-            .arg(&target)
-            .spawn()?;
-        
+        Command::new("open").arg(&target).spawn()?;
+
         #[cfg(target_os = "linux")]
-        Command::new("xdg-open")
-            .arg(&target)
-            .spawn()?;
-        
+        Command::new("xdg-open").arg(&target).spawn()?;
+
         let display = format!(
             "{} {} {}",
             "✔ Opened directory".bright_green(),
@@ -38,29 +32,27 @@ pub fn cmd_open(path: &str) -> Result<(String, String), Box<dyn std::error::Erro
 
     #[cfg(target_os = "windows")]
     {
-        // 安全地打开文件：使用 -LiteralPath 避免路径解析问题，
-        // 并通过参数列表传递路径而非字符串拼接，防止 Shell 注入
+        // 安全地打开文件：使用 Start-Process 的 -FilePath 指定路径，
+        // 路径用英文双引号包裹，防止 PowerShell 解析空格、括号等特殊字符
+        let path_str = target.to_string_lossy().to_string();
         Command::new("powershell")
             .args([
                 "-NoProfile",
                 "-Command",
-                "Start-Process",
-                "-LiteralPath",
+                &format!(
+                    "Start-Process -FilePath \"{}\"",
+                    path_str.replace('"', "`\""),
+                ),
             ])
-            .arg(&target)
             .spawn()?;
     }
-    
+
     #[cfg(target_os = "macos")]
-    Command::new("open")
-        .arg(&target)
-        .spawn()?;
-    
+    Command::new("open").arg(&target).spawn()?;
+
     #[cfg(target_os = "linux")]
-    Command::new("xdg-open")
-        .arg(&target)
-        .spawn()?;
-    
+    Command::new("xdg-open").arg(&target).spawn()?;
+
     let display = format!(
         "{} {} {}",
         "✔ Opened file".bright_green(),
