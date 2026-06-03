@@ -270,36 +270,71 @@ pub fn execute_single_command(
             Ok((CommandResult::Normal(false), display, raw, None))
         }
         "open" => {
+            let mut is_tag = false;
+            let mut tag_value: Option<String> = None;
             let mut path: Option<String> = None;
+            let mut selection: Option<usize> = None;
             let mut i = 1;
             while i < parts.len() {
-                if parts[i] == "-r" {
-                    if i + 1 >= parts.len() {
-                        return Err("Usage: open -r <line_number>[/path]".into());
+                match parts[i].as_str() {
+                    "-tag" => {
+                        is_tag = true;
+                        if i + 1 < parts.len() {
+                            tag_value = Some(parts[i + 1].clone());
+                            i += 1;
+                        }
                     }
-                    let resolved = resolve_line_path(&parts[i + 1], last_ls_items)?;
-                    path = Some(resolved);
-                    i += 2;
-                } else {
-                    if path.is_none() {
-                        path = Some(alias_manager.lock().unwrap().resolve_path(&parts[i]));
+                    "-sel" => {
+                        if i + 1 < parts.len() {
+                            if let Ok(n) = parts[i + 1].parse::<usize>() {
+                                selection = Some(n);
+                            }
+                            i += 1;
+                        }
                     }
-                    i += 1;
+                    "-r" => {
+                        if i + 1 >= parts.len() {
+                            return Err("Usage: open -r <line_number>[/path]".into());
+                        }
+                        let resolved = resolve_line_path(&parts[i + 1], last_ls_items)?;
+                        path = Some(resolved);
+                        i += 2;
+                    }
+                    p => path = Some(alias_manager.lock().unwrap().resolve_path(p)),
                 }
+                i += 1;
             }
 
-            let path = path
-                .or_else(|| {
-                    if !input_data.is_empty() {
-                        Some(input_data.to_string())
-                    } else {
-                        None
+            if is_tag {
+                match crate::commands::open::cmd_open_tag(
+                    tag_value.as_deref(),
+                    Some(&tag_manager.lock().unwrap()),
+                    selection,
+                )? {
+                    crate::commands::open::OpenResult::Success(display, raw) => {
+                        Ok((CommandResult::Normal(false), display, raw, None))
                     }
-                })
-                .ok_or("Usage: open <file> or open -r <line_number>[/path]")?;
+                    crate::commands::open::OpenResult::NeedSelection(items) => Ok((
+                        CommandResult::NeedOpenSelection(items),
+                        String::new(),
+                        String::new(),
+                        None,
+                    )),
+                }
+            } else {
+                let path = path
+                    .or_else(|| {
+                        if !input_data.is_empty() {
+                            Some(input_data.to_string())
+                        } else {
+                            None
+                        }
+                    })
+                    .ok_or("Usage: open <file> or open -r <line_number>[/path] or open -tag <tag>")?;
 
-            let (display, raw) = crate::commands::open::cmd_open(&path)?;
-            Ok((CommandResult::Normal(false), display, raw, None))
+                let (display, raw) = crate::commands::open::cmd_open(&path)?;
+                Ok((CommandResult::Normal(false), display, raw, None))
+            }
         }
         "mv" => {
             let mut source: Option<String> = None;

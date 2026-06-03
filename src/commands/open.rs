@@ -1,6 +1,10 @@
 use colored::*;
+use regex::Regex;
 use std::path::PathBuf;
 use std::process::Command;
+use std::env;
+use crate::managers::tag::TagManager;
+use crate::commands::cd::CdSelectionItem;
 
 pub fn cmd_open(path: &str) -> Result<(String, String), Box<dyn std::error::Error>> {
     let target = PathBuf::from(path);
@@ -60,4 +64,68 @@ pub fn cmd_open(path: &str) -> Result<(String, String), Box<dyn std::error::Erro
         "with default application".bright_green()
     );
     Ok((display, plain_path))
+}
+
+#[derive(Debug)]
+pub enum OpenResult {
+    Success(String, String),
+    NeedSelection(Vec<CdSelectionItem>),
+}
+
+pub fn cmd_open_tag(
+    tag: Option<&str>,
+    tag_manager: Option<&TagManager>,
+    selection: Option<usize>,
+) -> Result<OpenResult, Box<dyn std::error::Error>> {
+    let tag = tag.ok_or("Usage: open -tag <tag>")?;
+    let tag_manager = tag_manager.ok_or("Tag manager not available")?;
+
+    let tag_regex = Regex::new(tag)?;
+    
+    let mut matching_dirs = Vec::new();
+    
+    for (path, tags) in tag_manager.list_all() {
+        let is_index_file = path.to_lowercase().contains(".index") 
+            || path.to_lowercase().ends_with("index");
+        if is_index_file && tags.iter().any(|t| tag_regex.is_match(t)) {
+            let mut dir_path = PathBuf::from(path);
+            dir_path.pop();
+            
+            let full_path = dir_path.to_string_lossy().to_string();
+            
+            let current_dir = env::current_dir()?;
+            let display_path = match dir_path.strip_prefix(&current_dir) {
+                Ok(rel_path) => rel_path.to_string_lossy().to_string(),
+                Err(_) => full_path.clone(),
+            };
+            
+            matching_dirs.push(CdSelectionItem {
+                display_path,
+                full_path,
+                tags: tags.clone(),
+            });
+        }
+    }
+    
+    if matching_dirs.is_empty() {
+        return Err(format!("No directories found with .index file matching tag: {}", tag).into());
+    }
+    
+    if matching_dirs.len() == 1 {
+        let item = &matching_dirs[0];
+        let (display, raw) = cmd_open(&item.full_path)?;
+        return Ok(OpenResult::Success(display, raw));
+    }
+    
+    if let Some(sel) = selection {
+        if sel < 1 || sel > matching_dirs.len() {
+            return Err(format!("Invalid selection. Please enter a number between 1 and {}", matching_dirs.len()).into());
+        }
+        
+        let item = &matching_dirs[sel - 1];
+        let (display, raw) = cmd_open(&item.full_path)?;
+        return Ok(OpenResult::Success(display, raw));
+    }
+    
+    Ok(OpenResult::NeedSelection(matching_dirs))
 }

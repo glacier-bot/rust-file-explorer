@@ -126,6 +126,13 @@ pub fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
             "  {}       Open file/directory by ls line number ✨\n",
             "open -r <line>".truecolor(255, 182, 193).bold()
         ));
+        output.push_str(&format!(
+            "  {}   Open directory with .index file matching tag 🔖\n",
+            "open -tag <tag>".truecolor(255, 182, 193).bold()
+        ));
+        output.push_str(&format!(
+            "                      supports regex matching 💕\n\n"
+        ));
 
         output.push_str(&format!(
             "  {}    Move file/folder to destination 📦\n",
@@ -418,6 +425,13 @@ pub fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
         output.push_str(&format!(
             "  {}       Open file/directory by ls line number\n",
             "open -r <line>".cyan().bold()
+        ));
+        output.push_str(&format!(
+            "  {}   Open directory with .index file matching tag\n",
+            "open -tag <tag>".cyan().bold()
+        ));
+        output.push_str(&format!(
+            "                      supports regex matching\n\n"
         ));
 
         output.push_str(&format!(

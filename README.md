@@ -394,6 +394,8 @@ change -std           # 切回标准模式
 | `mv <src> <dest>`      | 移动文件 / 目录                                  |
 | `mv <src> <dest> --cp` | 复制文件 / 目录（保留原文件）                    |
 | `open <path>`          | 用系统默认应用打开文件，或在资源管理器中打开目录 |
+| `open -r <line>`       | 按 `ls` 输出的行号打开文件 / 目录                |
+| `open -tag <pattern>`  | 按标签匹配打开对应目录（`.index` 约定）          |
 | `mkdf -f <path>`       | 创建文件，自动补齐父目录                         |
 | `mkdf -d <path>`       | 创建文件夹                                       |
 | `mkdf -d -p <path>`    | 创建多级嵌套文件夹                               |
@@ -483,6 +485,7 @@ tag add /path/to/folder/.index work project important
 
 # 3. 按标签跳转 / 检索
 cd -idx work               # 直接跳转
+open -tag work             # 直接在资源管理器中打开
 tag find work project      # 全局搜索匹配的目录
 ls -t work                 # 当前目录下按标签过滤
 ```

@@ -14,6 +14,8 @@ pub enum CommandResult {
     Normal(bool),
     /// 需要 cd 选择
     NeedCdSelection(Vec<crate::commands::cd::CdSelectionItem>),
+    /// 需要 open 选择
+    NeedOpenSelection(Vec<crate::commands::cd::CdSelectionItem>),
 }
 
 /// 执行命令管道（支持 `->` 连接多个命令）
@@ -72,6 +74,9 @@ pub fn execute_command(
             Ok((cmd_result, display_output, raw_output, new_prev_dir)) => {
                 println!("{}", display_output);
                 if let CommandResult::NeedCdSelection(_) = cmd_result {
+                    return Ok(cmd_result);
+                }
+                if let CommandResult::NeedOpenSelection(_) = cmd_result {
                     return Ok(cmd_result);
                 }
                 if let CommandResult::Normal(exit) = cmd_result {

@@ -40,6 +40,7 @@ pub fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
     let last_ls_items: Arc<Mutex<Vec<FileInfo>>> = Arc::new(Mutex::new(Vec::new()));
     let mut previous_dir: Option<String> = None;
     let mut pending_cd_selection: Option<(Vec<crate::commands::cd::CdSelectionItem>, Option<String>)> = None;
+    let mut pending_open_selection: Option<(Vec<crate::commands::cd::CdSelectionItem>, Option<String>)> = None;
 
     let helper = RfeHelper {
         completer: FilenameCompleter::new(),
@@ -58,7 +59,7 @@ pub fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
     rl.set_helper(Some(helper));
 
     loop {
-        let prompt = if pending_cd_selection.is_some() {
+        let prompt = if pending_cd_selection.is_some() || pending_open_selection.is_some() {
             format!("{} Enter selection number: ", "📍".bright_blue())
         } else {
             get_prompt_string()
@@ -117,6 +118,31 @@ pub fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
                     if let Some(new_prev) = new_previous_dir {
                         previous_dir = Some(new_prev);
                     }
+                } else if let Some((items, _tag)) = pending_open_selection.take() {
+                    let selection: usize = match input.parse() {
+                        Ok(n) => n,
+                        Err(_) => {
+                            eprintln!("{} Invalid input, please enter a number.", "❌".red());
+                            continue;
+                        }
+                    };
+
+                    if selection < 1 || selection > items.len() {
+                        eprintln!(
+                            "{} Selection out of range, please enter a number between 1 and {}.",
+                            "❌".red(),
+                            items.len()
+                        );
+                        continue;
+                    }
+
+                    let item = &items[selection - 1];
+                    let target = &item.full_path;
+
+                    match crate::commands::open::cmd_open(target) {
+                        Ok((display, _)) => println!("{}", display),
+                        Err(e) => eprintln!("{} {}", "❌".red(), e),
+                    }
                 } else {
                     match execute_command(
                         input,
@@ -136,6 +162,12 @@ pub fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
                             println!("{}", output);
                             pending_cd_selection = Some((items, tag));
                         }
+                        Ok(CommandResult::NeedOpenSelection(items)) => {
+                            let tag = items.get(0).and_then(|item| item.tags.first().cloned());
+                            let output = crate::commands::cd::render_selection_list(&items);
+                            println!("{}", output);
+                            pending_open_selection = Some((items, tag));
+                        }
                         Err(e) => {
                             messaging::print_error(&e.to_string());
                         }
@@ -145,6 +177,9 @@ pub fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
             Err(rustyline::error::ReadlineError::Interrupted) => {
                 if pending_cd_selection.is_some() {
                     pending_cd_selection = None;
+                    messaging::print_selection_cancelled();
+                } else if pending_open_selection.is_some() {
+                    pending_open_selection = None;
                     messaging::print_selection_cancelled();
                 } else {
                     messaging::print_exit_message();
