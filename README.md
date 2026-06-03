@@ -1,139 +1,251 @@
-# Rust File Explorer (rfe)
+# rfe — Rust File Explorer
 
-一个高性能、跨平台的命令行文件浏览器，使用 Rust 编写，提供直观的彩色界面、文件类型图标和丰富的文件操作功能，让你在终端中也能高效管理文件。
+> 为终端设计的现代文件浏览器与工作流引擎
 
-## ✨ 核心功能
+**高性能 · 跨平台 · 可组合**
 
-rfe 围绕 **高效**、**好用**、**好玩** 三个维度，提供完整的终端文件管理能力。
-
-### 🧰 基础文件操作
-
-- **目录浏览**：彩色输出与文件类型 emoji 图标，支持隐藏文件、详细信息（大小 / 创建时间 / 修改时间）的展示；所有条目自动显示行号，配合 `-r` 参数可实现快速操作
-- **行号快速导航**：基于 ls 输出的行号，配合 `-r` 参数快速操作文件和目录，无需输入完整路径
-- **文件操作**：移动、复制（`mv --cp`）、使用系统默认应用打开（`open`），均支持 `-r` 参数通过行号引用
-- **创建工具**：`mkdf` 命令一站式创建文件 / 文件夹，自动补齐父目录
-- **剪贴板集成**：一键复制当前目录或文件绝对路径，`cpf` 支持 `-r` 参数复制行号对应路径
-- **正则搜索**：`ls --re` 全局正则搜索，支持递归与大小写不敏感匹配
-
-### ⚙️ 高效语法
-
-- **路径别名（`@`）**：自定义短别名替代长路径，全局可用、持久化、可补全
-- **命令链式执行（`->`** **/** **`->!`）**：多命令串联，前序输出自动注入后续命令，支持容错节点
-- **占位符扩展（`{}`）**：将前序输出插入到任意参数位置，支持多次引用
-- **路径层级弹出（`{}.pop...`）**：在占位符后追加 `.pop`（或简写 `.`），每多一个 `.pop`/`.` 向上回退一级目录，自动处理边界
-- **标签管理**：为文件添加多标签，支持正则查询、批量筛选、自动备份
-- **标签目录跳转（`cd -idx`）**：基于 `.index` 文件约定，通过标签快速跳转到目标目录
-- **目录历史返回（`cd -b`** **/** **`cd -back`）**：一键返回上一个工作目录
-
-### 🎨 体验增强
-
-- **双运行模式**：交互式 REPL（含命令补全、历史记录、ESC 一键清空）与直接命令执行
-- **Moe Moe 模式（`-moe`）**：粉色系配色 + 智能颜文字，可通过 `change` 动态切换
-- **Welcome 命令**：随时重新显示欢迎页面，自动适配当前模式
-- **跨平台兼容**：完美支持 Windows / Linux / macOS
-- **轻量高性能**：Rust 原生编译，启动迅速、资源占用低
-
-## 🔑 核心概念与进阶语法
-
-rfe 在标准 CLI 命令之上引入了一套**可组合的工作流语法**。理解以下核心概念，将显著提升日常文件操作效率：
-
-| 语法             | 名称     | 一句话说明                                                  |
-| ---------------- | -------- | ----------------------------------------------------------- |
-| `-r <line>`      | 行号导航 | 通过 ls 输出的行号快速操作文件和目录                        |
-| `@<alias>`       | 路径别名 | 用短名称代替任意长路径                                      |
-| `cmd1 -> cmd2`   | 命令链   | 串联多个命令，前序输出自动传递                              |
-| `{}`             | 占位符   | 把前序输出插入到任意参数位置                                |
-| `{}.pop...`      | 路径弹出 | 在前序路径上向上回退 N 级目录（`.pop` 与 `.` 均可，可混用） |
-
-它们可以自由组合，例如 `cppwd -> alias add proj {}.pop` 表示「取当前路径的父目录，添加为名为 `proj` 的别名」。
+[![Rust](https://img.shields.io/badge/Rust-1.65%2B-orange?logo=rust)](https://www.rust-lang.org)
+[![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)](https://github.com/glacier-bot/rust-file-explorer)
 
 ---
 
-### 📋 `-r` — 行号快速导航
+## 目录
 
-每次执行 `ls` 命令时，都会显示带行号的文件和目录列表。使用 `-r` 参数配合这些行号，可以快速操作文件而无需输入完整路径。
+- [项目简介](#项目简介)
+- [核心亮点](#核心亮点)
+- [安装指南](#安装指南)
+  - [环境要求](#环境要求)
+  - [从源码编译](#从源码编译)
+  - [接入系统 PATH](#接入系统-path)
+  - [验证安装](#验证安装)
+- [快速开始](#快速开始)
+  - [启动方式](#启动方式)
+  - [你的第一条命令](#你的第一条命令)
+- [特色功能详解](#特色功能详解)
+  - [行号导航（`-r`）](#行号导航-r)
+  - [路径别名（`@`）](#路径别名-)
+  - [命令链（`->`）](#命令链-)
+  - [占位符与 POP 展开（`{}` / `{}.pop`）](#占位符与-pop-展开----pop)
+  - [标签管理（`tag`）](#标签管理-tag)
+  - [目录历史（`cd -b`）](#目录历史-cd--b)
+  - [萌系模式（`-moe`）](#萌系模式--moe)
+- [命令参考](#命令参考)
+  - [目录浏览](#目录浏览)
+  - [文件操作](#文件操作)
+  - [剪贴板](#剪贴板)
+  - [路径别名](#路径别名)
+  - [标签管理](#标签管理-1)
+  - [界面控制](#界面控制)
+- [进阶用法](#进阶用法)
+  - [别名与 POP 路径组合](#别名与-pop-路径组合)
+  - [命令链实战](#命令链实战)
+  - [标签目录约定（`.index`）](#标签目录约定index)
+- [故障排除](#故障排除)
+  - [安装与编译](#安装与编译)
+  - [运行时问题](#运行时问题)
+  - [快速诊断](#快速诊断)
+- [技术栈](#技术栈)
+- [贡献指南](#贡献指南)
+- [许可证与联系](#许可证与联系)
+
+---
+
+## 项目简介
+
+**rfe** 是一个使用 Rust 编写的高性能命令行文件浏览器。它在传统 `ls` / `cd` 的基础上，引入了一套**可组合的工作流语法**，包括行号导航、路径别名、命令链、占位符扩展等机制，让终端文件操作从"逐字输入"进化为"语义编排"。
+
+无论是日常目录浏览、项目路径跳转，还是复杂的批量文件处理，rfe 都能通过简洁的表达式在单行内完成。
+
+---
+
+## 核心亮点
+
+| 特性                         | 说明                                                 | 典型场景                                  |
+| ---------------------------- | ---------------------------------------------------- | ----------------------------------------- |
+| **行号导航（`-r`）**         | 基于 `ls` 输出序号快速操作文件，无需输入路径         | `cd -r 3` 直接跳转第 3 个目录             |
+| **路径别名（`@`）**          | 为任意目录设置短名称，全局持久化                     | `@proj` 代替 `/home/user/projects/my-app` |
+| **命令链（`->`）**           | 多命令串联，前序输出自动注入后续                     | `ls --re "\.rs$" -> open` 搜索并打开      |
+| **占位符（`{}`）**           | 将前序输出插入任意参数位置                           | `cppwd -> alias add home {}`              |
+| **POP 展开（`{}.pop`）**     | 在路径上向上回退 N 级目录                            | `cpf src/main.rs -> cd {}.pop` 跳到项目根 |
+| **标签管理（`tag`）**        | 为文件打多标签，支持正则检索与批量筛选               | `tag find "rust\|work"` 跨目录检索        |
+| **标签目录约定（`.index`）** | 借助 `.index` 文件让目录参与标签体系，实现按标签跳转 | `cd -idx work` 跳转到标签为 work 的目录   |
+| **双运行模式**               | 交互式 REPL（补全 / 历史 / ESC 清空）与单次命令执行  | 连续操作用 REPL，脚本调用用单次           |
+
+---
+
+## 安装指南
+
+### 环境要求
+
+| 项目     | 要求                                         |
+| -------- | -------------------------------------------- |
+| Rust     | 1.65.0 及以上                                |
+| Cargo    | 与 Rust 同步发布                             |
+| 操作系统 | Windows 10+ / Linux（内核 4.15+）/ macOS 11+ |
+
+### 从源码编译
 
 ```bash
-# 使用行号快速操作
-ls              # 查看当前目录
-cd -r 2        # 跳转到第 2 个条目对应的目录
-open -r 3      # 打开第 3 个条目对应的文件
-cpf -r 1       # 复制第 1 个条目的路径到剪贴板
-
-# mv 命令的源和目标都可以使用 -r 参数
-mv -r 2 /tmp/           # 将第 2 个条目移动到 /tmp/ 目录
-mv -r 2 -r 3            # 将第 2 个条目移动到第 3 个目录
-mv -r 2 -r 3 --cp       # 将第 2 个条目复制到第 3 个目录
-
-# 支持追加子路径
-cd -r 1/src/main.rs  # 跳转到第 1 个目录下的 src/main.rs 文件
-mv -r 2 -r 3/subdir  # 将第 2 个条目移动到第 3 个目录的子目录
-
-# 支持两种分隔符
-cd -r 1/subdir    # 使用 / 分隔符
-cd -r 1\subdir    # 使用 \ 分隔符（Windows）
+git clone https://github.com/glacier-bot/rust-file-explorer.git
+cd rust-file-explorer
+cargo build --release
 ```
 
-**关键特性：**
+编译产物位于 `target/release/rfe`（Windows 下为 `rfe.exe`）。
 
-- **行号生命周期：** 每次 ls 命令会更新行号记录，新的 ls 会完全替换旧的
-- **持久有效：** 即使切换目录，之前的 ls 记录仍然有效（直到下次 ls）
-- **分隔符兼容：** 同时支持 `/` 和 `\` 两种路径分隔符
-- **智能补全：** 在 REPL 模式下，输入 `cd -r 1/` 或 `cd -r 1\` 后按 Tab 可自动补全子路径
-- **多命令支持：** `cd`、`open`、`cpf` 支持单个 `-r` 参数；`mv` 命令的源和目标**都可以**使用 `-r` 参数
-- **REPL 模式独有：** `-r` 参数功能仅在交互式 REPL 模式下可用
+### 接入系统 PATH
+
+#### Linux / macOS
+
+```bash
+sudo cp target/release/rfe /usr/local/bin/
+```
+
+#### Windows（PowerShell）
+
+**方式 A：复制到系统目录（需管理员权限）**
+
+将 `target\release\rfe.exe` 复制到 `C:\Windows\System32` 或任意已加入 `PATH` 的目录。
+
+**方式 B：将编译目录加入用户 PATH（推荐）**
+
+```powershell
+[Environment]::SetEnvironmentVariable(
+    "Path",
+    $env:Path + ";C:\path\to\rust-file-explorer\target\release",
+    [EnvironmentVariableTarget]::User
+)
+```
+
+执行后关闭并重新打开 PowerShell 窗口使其生效。
+
+**方式 C：在 PowerShell 配置文件中设置别名**
+
+```powershell
+if (!(Test-Path -Path $PROFILE)) { New-Item -ItemType File -Path $PROFILE -Force }
+Add-Content $PROFILE 'Set-Alias -Name rfe -Value "C:\path\to\rust-file-explorer\target\release\rfe.exe"'
+. $PROFILE
+```
+
+> **常见问题**：若 PowerShell 提示"无法加载文件，因为在此系统上禁止运行脚本"，请以管理员身份运行 `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` 解除限制。
+
+### 验证安装
+
+```bash
+rfe help
+```
+
+正常显示帮助信息即表示安装成功。
 
 ---
 
-### 🔖 `@` — 路径别名（Path Aliases）
+## 快速开始
 
-为常用目录设置短别名，之后用 `@别名` 即可瞬间定位，无需输入冗长路径。
+### 启动方式
+
+| 模式            | 命令                   | 适用场景                                   |
+| --------------- | ---------------------- | ------------------------------------------ |
+| **交互式 REPL** | `rfe`                  | 连续多次操作；享受补全、历史记录、ESC 清空 |
+| **单次命令**    | `rfe <command> [args]` | 脚本调用、与其他 CLI 工具组合              |
+
+> **提示**：REPL 模式下无需输入 `rfe` 前缀，直接键入命令即可。
+
+### 你的第一条命令
 
 ```bash
-# 管理别名
-rfe alias add <name> <path>   # 添加 / 更新
-rfe alias remove <name>       # 删除
-rfe alias list                # 列出全部
+# 进入 REPL
+rfe
 
-# 使用别名（在任何接收路径的命令中均可）
-rfe cd @proj
-rfe ls @proj/src/components
-rfe open @dl/report.pdf
+# 浏览当前目录
+ls
+
+# 使用行号快速跳转（假设第 2 项是 src 目录）
+cd -r 2
+
+# 返回上级
+cd ..
+
+# 退出 REPL
+exit
+```
+
+---
+
+## 特色功能详解
+
+### 行号导航（`-r`）
+
+每次执行 `ls` 后，条目会自动编号。使用 `-r <line>` 即可通过行号引用文件或目录，无需输入完整路径。
+
+```bash
+ls                    # 显示带行号的目录列表
+cd -r 2              # 跳转到第 2 个条目对应的目录
+open -r 3            # 用系统默认应用打开第 3 个条目
+cpf -r 1             # 复制第 1 个条目的绝对路径到剪贴板
+mv -r 2 -r 3 --cp    # 将第 2 个条目复制到第 3 个目录
 ```
 
 **关键特性**
 
-- 全局可用：兼容 `ls`、`cd`、`open`、`cpf`、`mv` 等所有路径相关命令
-- 子路径拼接：支持 `@别名/子路径` 形式深入目录
-- 持久化存储：自动保存至系统配置目录，重启后依旧有效
-  - Windows：`%APPDATA%\rfe\aliases.json`
-  - Linux / macOS：`~/.config/rfe/aliases.json`
-- 交互式补全：REPL 中输入 `@` + Tab 可自动补全已有别名
+- **生命周期**：每次 `ls` 会更新行号记录，新记录完全替换旧记录
+- **持久有效**：即使切换目录，之前的 `ls` 记录仍然有效（直到下次 `ls`）
+- **子路径追加**：支持 `cd -r 2/src/main.rs` 形式深入子目录
+- **分隔符兼容**：同时支持 `/` 与 `\`（Windows）
+- **智能补全**：REPL 中输入 `cd -r 2/` 后按 `Tab` 可自动补全子路径
+- **模式限制**：`-r` 仅在交互式 REPL 模式下可用
 
 ---
 
-### 🔗 `->` — 命令链式执行（Command Chain）
+### 路径别名（`@`）
 
-通过 `->` 将多个命令串联，前一个命令的**原始输出**会作为输入数据传递给下一个命令，实现复杂多步操作的"一行式"表达。
+为常用目录设置短别名，之后用 `@别名` 即可瞬间定位。
 
 ```bash
-cmd1 -> cmd2 -> cmd3   # 顺序执行；任一命令失败则中断
-cmd1 ->! cmd2          # 容错节点：cmd1 失败也继续执行 cmd2
+# 管理别名
+alias add proj /home/user/projects/my-app
+alias remove proj
+alias list
+
+# 使用别名
+cd @proj
+ls @proj/src
+open @dl/report.pdf
+```
+
+**关键特性**
+
+- **全局可用**：兼容 `ls`、`cd`、`open`、`cpf`、`mv` 等所有路径相关命令
+- **子路径拼接**：支持 `@别名/子路径` 形式深入目录
+- **持久化存储**：自动保存至系统配置目录，重启后依旧有效
+  - Windows：`%APPDATA%\rfe\aliases.json`
+  - Linux / macOS：`~/.config/rfe/aliases.json`
+- **交互式补全**：REPL 中输入 `@` + `Tab` 可自动补全已有别名
+
+---
+
+### 命令链（`->`）
+
+通过 `->` 将多个命令串联，前一个命令的**原始输出**会自动作为输入传递给下一个命令，实现复杂操作的"一行式"表达。
+
+```bash
+cmd1 -> cmd2 -> cmd3    # 顺序执行；任一命令失败则中断
+cmd1 ->! cmd2           # 容错节点：cmd1 失败也继续执行 cmd2
 ```
 
 **典型示例**
 
 ```bash
-# 1. 浏览当前目录后跳到上级目录
-rfe pwd -> ls -> cd .. -> pwd
+# 浏览当前目录后跳到上级目录
+pwd -> ls -> cd .. -> pwd
 
-# 2. 正则搜索 README 并复制其绝对路径到剪贴板
-rfe ls --re "^README\.md$" -> cpf
+# 正则搜索 README 并复制其绝对路径到剪贴板
+ls --re "^README\.md$" -> cpf
 
-# 3. 搜索并打开 .rs 文件
-rfe ls --re "\.rs$" -> open
+# 搜索并打开 .rs 文件
+ls --re "\.rs$" -> open
 
-# 4. 容错示例：目录不存在也继续 ls
+# 容错示例：目录不存在也继续执行
 rfe cd maybe_nonexist ->! ls
 ```
 
@@ -145,31 +257,46 @@ rfe cd maybe_nonexist ->! ls
 
 ---
 
-### 📍 `{}` — 占位符扩展（Placeholder Expansion）
+### 占位符与 POP 展开（`{}` / `{}.pop`）
 
-默认情况下前序输出作为下一命令的首参数。使用 `{}` 可将其插入到**任意位置**、**多次引用**，或**拼接子路径**。
+默认情况下，前序输出作为下一命令的首参数。使用 `{}` 可将其插入到**任意位置**、**多次引用**，或**拼接子路径**。
 
 ```bash
-cmd1 -> cmd2 <arg1> {} <arg3>   # 插入到中间位置
-cmd1 -> cmd2 {} {}              # 多次引用同一输出
-cmd1 -> cmd2 {}/subpath         # 拼接子路径
-cmd1 -> cmd2 {}\subpath         # Windows 反斜杠也支持
+cmd1 -> cmd2 arg1 {} arg3     # 插入到中间位置
+cmd1 -> cmd2 {} {}            # 多次引用同一输出
+cmd1 -> cmd2 {}/subpath       # 拼接子路径
 ```
+
+在占位符后追加 `.pop`（或简写 `.`），表示在路径上**向上回退对应层级**。每多一个 `.pop` / `.` 即向上一级。
+
+```bash
+cmd -> cd {}.pop          # 上一级（父目录），等价于 cmd -> cd {}.
+cmd -> cd {}.pop.pop      # 上两级，等价于 cmd -> cd {}..
+cmd -> cd {}...           # 上三级（简写形式）
+```
+
+> **提示**：`.pop` 是语义化写法（更易读），`.` 是简写形式（更紧凑），两者可混用，例如 `{}.pop.` 等价于上两级。
 
 **典型示例**
 
 ```bash
 # 用当前路径快速添加别名（输出位于命令尾部）
-rfe cppwd -> alias add desktop {}
+cppwd -> alias add desktop {}
 
 # 复制文件路径，并为该文件添加多个标签
-rfe cpf main.rs -> tag add {} rust code
+cpf main.rs -> tag add {} rust code
 
 # 打开前一个目录下的特定文件
-rfe pwd -> open {}/test.txt
+pwd -> open {}/test.txt
 
 # 使用路径弹出后再拼接子路径
-rfe cpf src/main.rs -> open {}.pop/test.txt
+cpf src/main.rs -> open {}.pop/test.txt
+
+# 从深层文件快速跳到项目根
+cpf src/utils/mod.rs -> cd {}.pop.pop.pop
+
+# 取当前目录的祖父目录并设为别名
+pwd -> alias add ancestor {}.pop.pop
 ```
 
 **关键特性**
@@ -177,296 +304,92 @@ rfe cpf src/main.rs -> open {}.pop/test.txt
 - 精准定位：可在命令中任意位置插入
 - 多重引用：同一输出可在多处被替换
 - 子路径拼接：支持 `{}/subpath` 或 `{}\subpath` 形式深入目录
-- 默认传递保留：未写 `{}` 时仍按默认规则注入到首参数
-
----
-
-### 📂 `{}.pop` — 路径层级弹出（Path Level Pop）
-
-在占位符后追加任意数量的 `.pop`（或简写 `.`），表示在路径上**向上回退对应层级**。每多一个 `.pop` / `.` 即向上一级。
-
-```bash
-cmd -> cd {}.pop           # 上一级（父目录），等价于 cmd -> cd {}.
-cmd -> cd {}.pop.pop       # 上两级，等价于 cmd -> cd {}..
-cmd -> cd {}.pop.pop.pop   # 上三级，等价于 cmd -> cd {}...
-```
-
-> 💡 `.pop` 是语义化写法（更易读），`.` 是简写形式（更紧凑），两者可在同一占位符中混用，例如 `{}.pop.` 等价于上两级。
-
-**典型示例**
-
-```bash
-# 从某个深层文件快速跳到项目根
-rfe cpf src/utils/mod.rs -> cd {}.pop.pop.pop
-
-# 取当前目录的祖父目录并设为别名
-rfe pwd -> alias add ancestor {}.pop.pop
-```
-
-**关键特性**
-
-- 任意级联：理论上无层级上限
-- 边界安全：超出实际层级时自动停在最顶层并友好提示，不报错
+- 任意级联：POP 回退理论上无层级上限
+- 边界安全：超出实际层级时自动停在最顶层并友好提示
 - 跨平台：兼容 Windows 与 Unix 路径
-- 通用：可与 `cd`、`ls`、`open`、`mv` 等任意路径命令配合
-- 完整消费：`.pop` / `.` 字符会被完全消费，不会泄漏到展开后的命令中
 
 ---
 
-### 📦 `mkdf` — 文件 / 文件夹创建命令
+### 标签管理（`tag`）
 
-一站式创建工具，自动处理父目录。
+为文件添加多标签，支持正则查询、批量筛选与自动备份。
 
 ```bash
-mkdf -f <path>       # 创建文件，自动补齐父目录
-mkdf -d <path>       # 创建文件夹
-mkdf -d -p <path>    # 创建多级嵌套文件夹
-mkdf -h / --help     # 查看帮助
+# 管理标签
+tag add <file> <tag1> [tag2...]       # 添加标签
+tag remove <file> <tag1> [tag2...]    # 删除标签
+tag clear <file>                      # 清空全部标签
+tag get <file>                        # 查看标签
+tag list                              # 列出所有带标签的文件
+tag find <pattern1> [pattern2...]     # 全局按标签搜索（正则、多条件组合）
+tag backup / tag restore              # 手动备份 / 恢复
 ```
+
+> **提示**：`tag` 命令支持简写 `t`，例如 `t add main.rs rust`。部分子命令额外接受常见别名：`tag remove` ≡ `tag rm`、`tag list` ≡ `tag ls`、`tag find` ≡ `tag search`。
 
 **关键特性**
 
-- 文件 / 文件夹二合一：`-f` 创建文件、`-d` 创建文件夹
-- 自动父目录：创建文件时自动补齐缺失的父级目录
-- 路径灵活：兼容绝对路径、相对路径与别名路径
+- 多标签支持：单个文件可拥有任意数量标签
+- 正则检索：`tag find` 支持完整正则语法，可多条件组合
+- 自动备份：每次标签修改自动生成 `.bak`，防止误操作丢失数据
+- 持久化存储：与别名共用配置目录
 
 ---
 
-### 🔙 `cd -b` / `cd -back` — 快速返回上一个目录
+### 目录历史（`cd -b`）
 
 无需记忆路径即可在两个工作目录间快速来回切换。
 
 ```bash
 cd /path/to/dir1
 cd /path/to/dir2
-cd -b      # 返回 dir1
-cd -back   # 再次返回 dir2
+cd -b       # 返回 dir1
+cd -back    # 再次返回 dir2
 ```
 
-**关键特性**
-
-- 短 / 长两种形式：`-b` 与 `-back` 等价
-- 自动记录历史，错误时友好提示
-- 完全兼容现有 `cd`、`cd ..`、`cd ~` 及命令链场景
+- `-b` 与 `-back` 等价
+- 跳转后自动更新历史，错误时友好提示
+- 完全兼容 `cd ..`、`cd ~` 及命令链场景
 
 ---
 
-### 🔖 `cd -idx <tag>` — 基于标签的目录跳转
+### 萌系模式（`-moe`）
 
-借助标签系统的 `.index` 文件约定，将"目录"纳入标签体系，实现按标签跳转。
-
-```bash
-cd -idx <tag>         # 跳转到指定标签的目录
-cd -idx "rust|proj"   # 支持正则匹配
-```
-
-当多个目录匹配时，会显示交互式选择列表：
-
-```text
-🔍 Multiple directories found:
-  1. /projects/rust-file-explorer -> rust work important
-  2. /projects/game-project -> game fun rust
-📍 Enter selection number: _
-```
-
-**前置约定**：在目标目录下创建 `.index` 文件并为其打标签即可。详见下方 [💡 使用技巧](#-使用技巧)。
-
-**关键特性**
-
-- 完整正则语法支持
-- 多结果交互选择
-- 跳转后自动更新历史，支持 `cd -b` 回退
-
----
-
-### ⌨️ ESC 键 — REPL 输入快速清空
-
-在 REPL 模式下，按 ESC 键可瞬间清空当前输入行内容，无需逐字符退格。常用于：误输入、长输入重来、临时放弃命令。
-
----
-
-### 🌸 `-moe` — Moe Moe 萌系模式
-
-启用后所有输出统一切换为粉色系配色（RGB: 255, 105, 180）并附加场景化颜文字（💖、🌸、✨、😢、👋 等），让终端操作更治愈～
+启用后所有输出统一切换为粉色系配色（RGB: 255, 105, 180）并附加场景化颜文字，让终端操作更治愈。
 
 ```bash
 rfe -moe              # 以萌系模式进入 REPL
 rfe -moe <command>    # 以萌系模式执行单条命令
-change -moe           # REPL 中动态切换到萌系模式
+change -moe           # REPL 中动态切换
 change -std           # 切回标准模式
 ```
 
-**关键特性**
-
 - 全命令覆盖，纯视觉增强，不影响任何原有功能
-- 欢迎语：`ciallo∠・ω⌒☆ Welcome to the moe moe mode！`
 - 运行时可动态切换，无需重启
 
 ---
 
-## 🛠️ 技术栈与环境要求
+## 命令参考
 
-### 运行 / 编译环境
+### 目录浏览
 
-| 项目     | 要求                                                     |
-| -------- | -------------------------------------------------------- |
-| Rust     | 1.65.0 及以上                                            |
-| Cargo    | 与 Rust 同步发布                                         |
-| 操作系统 | Windows 10+ / Linux（内核 4.15+） / macOS 11+（Big Sur） |
+| 命令                                     | 说明                                  |
+| ---------------------------------------- | ------------------------------------- |
+| `ls`                                     | 列出当前目录内容（带行号）            |
+| `ls <path>`                              | 列出指定目录内容                      |
+| `ls -a`                                  | 同时显示隐藏文件                      |
+| `ls -l`                                  | 显示详细信息（大小、创建 / 修改时间） |
+| `ls -la`                                 | 等同 `-a -l`                          |
+| `ls --re <pattern>`                      | 正则全局搜索（当前目录）              |
+| `ls --re-deep <pattern>`                 | 递归正则搜索                          |
+| `ls --re --xcaps <pattern>`              | 大小写不敏感正则搜索                  |
+| `ls -tag` / `ls --tags`                  | 列表中附带显示标签                    |
+| `ls -t <pattern>` / `ls --tag <pattern>` | 按标签过滤，可重复传参组合多标签      |
+| `ls -t --deep <pattern>`                 | 递归按标签过滤                        |
 
-### 核心依赖（节选自 [Cargo.toml](file:///c:/Users/q/Desktop/rust-file-explorer/Cargo.toml)）
+### 文件操作
 
-| 依赖                   | 版本 | 用途                             |
-| ---------------------- | ---- | -------------------------------- |
-| `colored`              | 2.1  | 终端彩色输出                     |
-| `crossterm`            | 0.28 | 跨平台终端按键事件（ESC 清空等） |
-| `rustyline`            | 12.0 | REPL 行编辑、补全与历史记录      |
-| `arboard`              | 3.4  | 跨平台剪贴板访问                 |
-| `regex`                | 1.10 | 正则搜索与标签匹配               |
-| `open`                 | 5.0  | 调用系统默认程序打开文件         |
-| `dirs`                 | 5.0  | 获取跨平台配置 / 主目录路径      |
-| `unicode-width`        | 0.1  | Unicode 字符宽度计算，优化对齐   |
-| `serde` / `serde_json` | 1.0  | 别名、标签数据的 JSON 持久化     |
-| `tempfile`             | 3.10 | 标签备份等场景的临时文件管理     |
-
-## 📦 安装步骤
-
-### 第一步：获取并编译源码
-
-克隆仓库、进入项目目录并编译发布版本，编译产物位于 `target/release/rfe`（Windows 下为 `rfe.exe`）：
-
-```bash
-git clone https://github.com/glacier-bot/rust-file-explorer.git
-cd rust-file-explorer
-cargo build --release
-```
-
-### 第二步：将 rfe 接入系统 PATH
-
-根据你的操作系统，选择对应的部署方式，使 `rfe` 命令可在终端任意位置直接调用。
-
-#### 🐧 Linux / macOS
-
-将编译产物复制到系统二进制目录即可：
-
-```bash
-sudo cp target/release/rfe /usr/local/bin/
-```
-
-#### 💻 Windows（PowerShell）
-
-以下三种方式任选其一，**推荐方式 B**，无需管理员权限且配置灵活。
-
-- **方式 A：复制到系统目录（最简单，需管理员权限）**
-
-  将 `target\release\rfe.exe` 复制到 `C:\Windows\System32` 或任意已加入 `PATH` 的目录。
-
-- **方式 B：将编译目录加入用户 PATH（推荐，永久生效）**
-
-  在 PowerShell 中执行（请替换为你的实际路径）：
-
-```powershell
-[Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\path\to\rust-file-explorer\target\release", [EnvironmentVariableTarget]::User)
-```
-
-执行后需关闭并重新打开 PowerShell 窗口使其生效。
-
-- **方式 C：在 PowerShell 配置文件中设置别名**
-
-  适合不希望修改 PATH 的场景，通过 `$PROFILE` 定义别名：
-
-```powershell
-if (!(Test-Path -Path $PROFILE)) { New-Item -ItemType File -Path $PROFILE -Force }
-Add-Content $PROFILE 'Set-Alias -Name rfe -Value "C:\path\to\rust-file-explorer\target\release\rfe.exe"'
-. $PROFILE
-```
-
-> 💡 **常见问题**：若 PowerShell 提示"无法加载文件，因为在此系统上禁止运行脚本"，请以管理员身份运行 `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` 解除限制。
-
-### 第三步：验证安装
-
-在任意终端（Bash / PowerShell / Zsh 等）中执行以下命令，能正常显示帮助信息即表示安装成功：
-
-```bash
-rfe help
-```
-
-## 🚀 使用指南
-
-### 运行模式
-
-| 模式            | 启动方式               | 适用场景                                             |
-| --------------- | ---------------------- | ---------------------------------------------------- |
-| **交互式 REPL** | `rfe`                  | 连续多次操作；享受补全、历史记录、ESC 清空等交互特性 |
-| **单次命令**    | `rfe <command> [args]` | 脚本调用、单次操作、与其他 CLI 工具组合使用          |
-
-> 💡 所有命令在两种模式下行为一致；REPL 中无需 `rfe` 前缀。
-
-### 命令速查表
-
-下表按命令族分组，覆盖 rfe 当前全部命令。`ls`、`cd` 等命令的子选项采用「主命令 + 选项」的形式列出，便于查阅。
-
-#### 📁 目录浏览（`ls`）
-
-| 用法                                     | 说明                                                         |
-| ---------------------------------------- | ------------------------------------------------------------ |
-| `ls`                                     | 列出当前目录内容（带行号）                                   |
-| `ls <path>`                              | 列出指定目录内容（带行号）                                   |
-| `ls -a`                                  | 同时显示隐藏文件                                             |
-| `ls -l`                                  | 显示详细信息（大小、创建 / 修改时间）                        |
-| `ls -la`                                 | 等同 `-a -l`                                                 |
-| `ls --re <pattern>`                      | 正则全局搜索（默认从当前目录）                               |
-| `ls --re-deep <pattern>`                 | 递归正则搜索                                                 |
-| `ls --re --xcaps <pattern>`              | 大小写不敏感正则搜索（`--xcaps` 与 `--re-insensitive` 等价） |
-| `ls --re-deep --xcaps <pattern>`         | 递归 + 大小写不敏感                                          |
-| `ls -tag` / `ls --tags`                  | 列表中附带显示每个文件的标签                                 |
-| `ls -t <pattern>` / `ls --tag <pattern>` | 按标签过滤当前目录文件，可重复传参组合多标签                 |
-| `ls -t --deep <pattern>`                 | 递归按标签过滤，向下遍历所有子目录                           |
-
-##### 📋 基于 ls 行号的快速操作（`-r` 参数）
-
-每次 `ls` 命令会为条目显示行号，这些行号可以与其他命令配合使用，实现快速导航和操作：
-
-| 用法                           | 说明                                                           |
-| ------------------------------ | -------------------------------------------------------------- |
-| `cd -r <line-num>[/subpath]`   | 跳转到 ls 输出中第 <line-num> 个条目对应的目录，支持追加子路径 |
-| `open -r <line-num>[/subpath]` | 打开 ls 输出中第 <line-num> 个条目对应的文件或目录             |
-| `cpf -r <line-num>[/subpath]`  | 复制 ls 输出中第 <line-num> 个条目的绝对路径                   |
-| `mv -r <line-num> <dest>`      | 将 ls 输出中第 <line-num> 个条目移动到目标位置                 |
-| `mv <src> -r <line-num>`       | 将源文件移动到 ls 输出中第 <line-num> 个条目对应的位置         |
-
-**示例：**
-
-```bash
-ls              # 查看当前目录，记住第 2 个是 src 目录
-cd -r 2        # 直接跳转到 src 目录
-ls             # 在 src 目录中再次查看
-cd -r 1/main.rs  # 打开 src/1/main.rs 文件（假设第 1 个条目是某目录）
-```
-
-> 💡 **重要提示：** 行号路径支持 `/` 和 `\` 两种分隔符；在 REPL 模式下，输入 `cd -r 1/` 或 `cd -r 1\` 后按 Tab 键可以自动补全子路径。
-
-#### 📍 路径与导航（`pwd` / `cd`）
-
-| 用法                 | 说明                                               |
-| -------------------- | -------------------------------------------------- |
-| `pwd`                | 打印当前工作目录                                   |
-| `cd` / `cd ~`        | 切换到用户主目录                                   |
-| `cd ..`              | 切换到上级目录                                     |
-| `cd <path>`          | 切换到指定目录                                     |
-| `cd -b` / `cd -back` | 返回上一个工作目录                                 |
-| `cd -idx <tag>`      | 通过 `.index` 文件标签跳转目录，支持正则与交互选择 |
-
-#### 📋 剪贴板（`cppwd` / `cpf`）
-
-| 用法         | 说明                               |
-| ------------ | ---------------------------------- |
-| `cppwd`      | 复制当前目录绝对路径到系统剪贴板   |
-| `cpf <file>` | 复制指定文件的绝对路径到系统剪贴板 |
-
-#### 🗂️ 文件操作（`mv` / `open` / `mkdf`）
-
-| 用法                   | 说明                                             |
+| 命令                   | 说明                                             |
 | ---------------------- | ------------------------------------------------ |
 | `mv <src> <dest>`      | 移动文件 / 目录                                  |
 | `mv <src> <dest> --cp` | 复制文件 / 目录（保留原文件）                    |
@@ -474,86 +397,82 @@ cd -r 1/main.rs  # 打开 src/1/main.rs 文件（假设第 1 个条目是某目�
 | `mkdf -f <path>`       | 创建文件，自动补齐父目录                         |
 | `mkdf -d <path>`       | 创建文件夹                                       |
 | `mkdf -d -p <path>`    | 创建多级嵌套文件夹                               |
-| `mkdf -h` / `--help`   | 查看 `mkdf` 帮助                                 |
 
-#### 🔖 路径别名（`alias` / `@`）
+### 剪贴板
 
-| 用法                      | 说明                     |
+| 命令         | 说明                               |
+| ------------ | ---------------------------------- |
+| `cppwd`      | 复制当前目录绝对路径到系统剪贴板   |
+| `cpf <file>` | 复制指定文件的绝对路径到系统剪贴板 |
+
+### 路径别名
+
+| 命令                      | 说明                     |
 | ------------------------- | ------------------------ |
 | `alias add <name> <path>` | 添加 / 更新别名          |
 | `alias remove <name>`     | 删除别名                 |
 | `alias list`              | 查看全部别名             |
 | `@<name>[/subpath]`       | 在任意路径参数中引用别名 |
 
-#### 🏷️ 标签管理（`tag` / `t`）
+> `alias add` ≡ `alias set`、`alias remove` ≡ `alias rm` ≡ `alias delete`、`alias list` ≡ `alias ls`
 
-| 用法                                 | 说明                                     |
-| ------------------------------------ | ---------------------------------------- |
-| `tag add <file> <tag1> [tag2...]`    | 为文件添加一个或多个标签                 |
-| `tag remove <file> <tag1> [tag2...]` | 删除指定标签                             |
-| `tag clear <file>`                   | 清空该文件的全部标签                     |
-| `tag get <file>`                     | 查看文件的标签                           |
-| `tag list`                           | 列出所有带标签的文件                     |
-| `tag find <pattern1> [pattern2...]`  | 全局按标签搜索文件（正则、可多条件组合） |
-| `tag backup` / `tag restore`         | 手动备份 / 恢复标签数据                  |
+### 标签管理
 
-> 💡 `tag` 命令也支持简写形式 `t`，例如 `t add main.rs rust`。`alias`、`tag` 的部分子命令额外接受常见别名：`alias add` ≡ `alias set`、`alias remove` ≡ `alias rm` ≡ `alias delete`、`alias list` ≡ `alias ls`、`tag remove` ≡ `tag rm`、`tag list` ≡ `tag ls`、`tag find` ≡ `tag search`。
+| 命令                                 | 说明                 |
+| ------------------------------------ | -------------------- |
+| `tag add <file> <tag1> [tag2...]`    | 添加标签             |
+| `tag remove <file> <tag1> [tag2...]` | 删除标签             |
+| `tag clear <file>`                   | 清空全部标签         |
+| `tag get <file>`                     | 查看标签             |
+| `tag list`                           | 列出所有带标签的文件 |
+| `tag find <pattern1> [pattern2...]`  | 全局按标签搜索       |
+| `tag backup` / `tag restore`         | 手动备份 / 恢复      |
 
-#### 🔗 命令链与占位符
+### 界面控制
 
-| 用法                  | 说明                                                        |
-| --------------------- | ----------------------------------------------------------- |
-| `cmd1 -> cmd2 -> ...` | 链式执行；前序输出注入下一命令                              |
-| `cmd1 ->! cmd2`       | 容错节点：前序失败也继续执行                                |
-| `{}`                  | 在下一命令的任意位置插入前序输出                            |
-| `{}.pop[.pop...]`     | 在前序路径上向上回退 N 级目录（每个 `.pop` 或 `.` 计 1 级） |
-
-#### 🎨 模式与界面
-
-| 用法                           | 说明                                 |
+| 命令                           | 说明                                 |
 | ------------------------------ | ------------------------------------ |
 | `welcome`                      | 重新显示欢迎页面（自动适配当前模式） |
 | `clear` / `cls`                | 清空终端屏幕                         |
 | `help` / `?`                   | 显示帮助信息                         |
-| `-moe` / `--moe`               | 启用萌系模式（启动参数）             |
-| `change -std` / `change --std` | REPL 中切换为标准模式                |
-| `change -moe` / `change --moe` | REPL 中切换为萌系模式                |
-| `ESC`                          | REPL 模式下清空当前输入行            |
+| `change -std` / `change --std` | 切换为标准模式                       |
+| `change -moe` / `change --moe` | 切换为萌系模式                       |
+| `ESC`（按键）                  | REPL 模式下清空当前输入行            |
 | `exit` / `quit` / `q`          | 退出 REPL                            |
-
-### 📝 正则表达式速查
-
-`ls --re` / `tag find` / `cd -idx` 均使用 Rust [`regex`](https://docs.rs/regex) 语法。常用元字符如下：
-
-| 语法               | 说明                | 示例                       |
-| ------------------ | ------------------- | -------------------------- |
-| `.`                | 匹配任意单个字符    | `fi.e` → file / fine       |
-| `*` / `+` / `?`    | 0+ / 1+ / 0 或 1 次 | `colou?r` → color / colour |
-| `^` / `$`          | 字符串起始 / 结尾   | `\.rs$` → 所有 `.rs` 文件  |
-| `[abc]` / `[^abc]` | 字符集（取反）      | `[Ff]ile` → File / file    |
-| `\|`               | 或逻辑              | `\.rs$\|\.toml$`           |
-| `()`               | 分组                | `(src\|target)/`           |
-
-> 💡 `ls --re` 默认仅搜索当前目录的直接条目，使用 `--re-deep` 可递归；匹配结果显示为相对当前目录的路径。
-
-### 💾 配置文件位置
-
-别名与标签数据均以 JSON 形式持久化到系统配置目录，重启后保留。每次标签修改会自动生成 `.bak` 备份，防止误操作丢失数据。
-
-| 平台          | 路径                                                                 |
-| ------------- | -------------------------------------------------------------------- |
-| Windows       | `%APPDATA%\rfe\aliases.json`、`%APPDATA%\rfe\tags.json`（含 `.bak`） |
-| Linux / macOS | `~/.config/rfe/aliases.json`、`~/.config/rfe/tags.json`（含 `.bak`） |
 
 ---
 
-## 💡 使用技巧
+## 进阶用法
 
-### 🏷️ 为文件夹打标签：`.index` 文件约定
+### 别名与 POP 路径组合
 
-rfe 的标签系统作用于**文件**而非目录。借助一个简单的约定，可让目录也参与标签体系，并配合 `cd -idx` 实现按标签跳转。
+```bash
+# 快速将当前目录的父目录设为别名
+pwd -> alias add proj {}.pop
 
-**约定**：在需要打标签的目录下创建一个 `.index` 文件，并为该文件添加标签。`tag find`、`ls -t`、`cd -idx` 均能识别此约定。
+# 先复制深层文件路径，再向上回退两级打开同目录下的配置
+cpf src/utils/mod.rs -> open {}..
+
+# 正则搜索项目根目录的 README，复制其路径并跳转到文件所在目录
+ls --re "^README\.md$" -> cpf -> cd {}.pop
+```
+
+### 命令链实战
+
+```bash
+# 链式容错：尝试进入项目目录，失败则进入别名备份目录
+cd ./maybe_proj ->! cd @proj -> ls
+
+# 搜索标签为 config 的文件并直接打开
+tag find "^config$" -> open {}
+
+# 复制当前路径、添加别名、再列出别名目录内容
+cppwd -> alias add current {} -> ls @current
+```
+
+### 标签目录约定（`.index`）
+
+rfe 的标签系统作用于**文件**而非目录。借助 `.index` 文件约定，可让目录也参与标签体系，并配合 `cd -idx` 实现按标签跳转。
 
 ```bash
 # 1. 在目标目录下创建 .index 占位文件
@@ -568,28 +487,103 @@ tag find work project      # 全局搜索匹配的目录
 ls -t work                 # 当前目录下按标签过滤
 ```
 
-**优势**
+**使用建议**
 
-- 语义清晰：`.index` 即"目录索引文件"
-- 跨平台：以 `.` 开头的隐藏文件在三大系统通用
-- 易管理：删除 `.index` 即解除该目录的所有标签
-- 零侵入：复用现有标签系统，无需额外代码
-
----
-
-#### 📌 使用建议
-
-1. **全局/磁盘级路径**：若要为整个磁盘（如 `D:\`、`/home/`）或经常访问的通用目录设置快捷方式，**优先使用 `alias` 功能**。别名是全局持久化的，适合高频、跨项目的通用路径。
-   
-2. **项目/文件夹级路径**：若要为单个项目文件夹、临时工作目录设置快捷方式，**优先使用 `.index` 标签约定**。标签与目录绑定，随项目移动/删除自动生效/失效，更适合项目级别的路径管理。
-
-3. **隐藏属性设置**：创建 `.index` 文件后，建议为其设置隐藏属性，避免在目录浏览时干扰正常文件列表：
-   - Windows：`attrib +h .index`
-   - Linux/macOS：默认以 `.` 开头的文件即为隐藏文件，无需额外操作
+- **全局 / 磁盘级路径**：优先使用 `alias`。别名全局持久化，适合高频、跨项目的通用路径。
+- **项目 / 文件夹级路径**：优先使用 `.index` 标签约定。标签与目录绑定，随项目移动 / 删除自动生效 / 失效，更适合项目级别的路径管理。
+- **隐藏属性**：创建 `.index` 后建议设置隐藏属性，避免干扰文件列表：
+  - Windows：`attrib +h .index`
+  - Linux / macOS：以 `.` 开头的文件默认隐藏，无需额外操作
 
 ---
 
-## 🤝 贡献指南
+## 故障排除
+
+### 安装与编译
+
+| 问题                                         | 可能原因              | 解决方案                                                                          |
+| -------------------------------------------- | --------------------- | --------------------------------------------------------------------------------- |
+| `cargo build --release` 失败                 | Rust 版本过低         | 执行 `rustup update`，确保 >= 1.65.0                                              |
+|                                              | 缺少系统依赖（Linux） | 安装 `build-essential` / `gcc` / `clang`                                          |
+| PowerShell 提示"无法加载文件...禁止运行脚本" | 执行策略受限          | 管理员运行 `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` |
+| 加入 PATH 后仍无法识别 `rfe`                 | 未重启终端 / 路径错误 | 关闭并重新打开终端；检查路径是否包含 `rfe.exe` 实际目录                           |
+
+### 运行时问题
+
+| 问题                            | 可能原因                     | 解决方案                                                         |
+| ------------------------------- | ---------------------------- | ---------------------------------------------------------------- |
+| `-r` 参数无效或提示"行号不存在" | 未先执行 `ls` / 行号已过期   | 先执行 `ls` 查看最新行号；`-r` 仅在 REPL 模式下可用              |
+| `cd -idx <tag>` 无反应或报错    | 目标目录不存在 `.index` 文件 | 在目标目录下创建 `.index` 文件并为其添加标签                     |
+| 别名 `@<name>` 无法解析         | 别名未添加 / 拼写错误        | 使用 `alias list` 检查已有别名；注意区分大小写                   |
+| 标签数据丢失                    | 异常退出 / 手动误删          | 检查配置目录下的 `.bak` 备份文件，执行 `tag restore` 恢复        |
+| 萌系模式 `-moe` 无颜色输出      | 终端不支持 ANSI 颜色         | 更换终端（Windows Terminal、iTerm2、GNOME Terminal 等）          |
+| 剪贴板操作 `cpf` / `cppwd` 失败 | 无图形会话 / 远程 SSH        | 在本地桌面会话中运行；Linux 可尝试安装 `xclip` 或 `wl-clipboard` |
+| 命令链 `->` 中断                | 前序命令返回非零退出码       | 若希望容错，使用 `->!` 代替 `->`                                 |
+
+### 快速诊断
+
+1. **确认版本与环境**
+
+   ```bash
+   rfe help          # 确认 rfe 可被调用
+   rustc --version   # 确认 Rust 版本 >= 1.65.0
+   ```
+
+2. **检查配置文件完整性**
+
+   ```bash
+   # Windows
+   ls "$env:APPDATA\rfe\"
+   # Linux / macOS
+   ls ~/.config/rfe/
+   ```
+
+   确认 `aliases.json` 与 `tags.json` 格式正确，必要时从 `.bak` 恢复。
+
+3. **查看详细错误信息**
+   - REPL 模式下命令会直接回显错误原因
+   - 直接执行模式下，使用 `rfe <command>` 观察标准错误输出
+
+4. **清理与重置**
+   ```bash
+   # 备份后删除配置文件，可强制重置所有别名与标签
+   mv ~/.config/rfe/aliases.json ~/.config/rfe/aliases.json.bak
+   mv ~/.config/rfe/tags.json ~/.config/rfe/tags.json.bak
+   ```
+
+若以上方案无法解决，欢迎通过 [Gitee Issues](https://gitee.com/glacier-bot/rust-file-explorer/issues) 提交问题，附上操作系统版本、Rust 版本及复现步骤。
+
+---
+
+## 技术栈
+
+### 核心依赖
+
+| 依赖                   | 版本 | 用途                         |
+| ---------------------- | ---- | ---------------------------- |
+| `colored`              | 2.1  | 终端彩色输出                 |
+| `crossterm`            | 0.28 | 跨平台终端按键事件           |
+| `rustyline`            | 12.0 | REPL 行编辑、补全与历史记录  |
+| `arboard`              | 3.4  | 跨平台剪贴板访问             |
+| `regex`                | 1.10 | 正则搜索与标签匹配           |
+| `open`                 | 5.0  | 调用系统默认程序打开文件     |
+| `dirs`                 | 5.0  | 获取跨平台配置 / 主目录路径  |
+| `unicode-width`        | 0.1  | Unicode 字符宽度计算         |
+| `serde` / `serde_json` | 1.0  | 别名、标签数据的 JSON 持久化 |
+| `tempfile`             | 3.10 | 标签备份等场景的临时文件管理 |
+
+### 配置文件位置
+
+别名与标签数据以 JSON 形式持久化到系统配置目录，重启后保留。每次标签修改自动生成 `.bak` 备份。
+
+| 平台          | 路径                                                                 |
+| ------------- | -------------------------------------------------------------------- |
+| Windows       | `%APPDATA%\rfe\aliases.json`、`%APPDATA%\rfe\tags.json`（含 `.bak`） |
+| Linux / macOS | `~/.config/rfe/aliases.json`、`~/.config/rfe/tags.json`（含 `.bak`） |
+
+---
+
+## 贡献指南
 
 欢迎以 Issue / PR / 文档改进等任意形式贡献本项目。
 
@@ -612,16 +606,15 @@ cargo test              # 单元测试
 cargo build --release   # 发布构建可通过
 ```
 
-## 📄 许可证
+---
 
-本项目基于 [MIT 许可证](LICENSE) 发布，可自由使用、修改与分发。
+## 许可证与联系
 
-## 📞 联系方式
-
-- 项目主页：[rust-file-explorer (Gitee)](https://gitee.com/glacier-bot/rust-file-explorer)
-- 问题反馈：[Gitee Issues](https://gitee.com/glacier-bot/rust-file-explorer/issues)
-- 邮箱：<1098644849@qq.com>
+- **许可证**：[MIT 许可证](LICENSE)
+- **项目主页**：[rust-file-explorer (Gitee)](https://gitee.com/glacier-bot/rust-file-explorer)
+- **问题反馈**：[Gitee Issues](https://gitee.com/glacier-bot/rust-file-explorer/issues)
+- **邮箱**：<1098644849@qq.com>
 
 ---
 
-⭐ 如果 rfe 帮到了你，欢迎点个 Star 支持一下！
+如果 rfe 帮到了你，欢迎点个 Star 支持一下！
