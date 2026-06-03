@@ -38,10 +38,16 @@ pub fn cmd_open(path: &str) -> Result<(String, String), Box<dyn std::error::Erro
 
     #[cfg(target_os = "windows")]
     {
-        let path_str = target.to_string_lossy();
-        let ps_command = format!("Start-Process -FilePath '{}'", path_str.replace('\'', "''"));
+        // 安全地打开文件：使用 -LiteralPath 避免路径解析问题，
+        // 并通过参数列表传递路径而非字符串拼接，防止 Shell 注入
         Command::new("powershell")
-            .args(["-NoProfile", "-Command", &ps_command])
+            .args([
+                "-NoProfile",
+                "-Command",
+                "Start-Process",
+                "-LiteralPath",
+            ])
+            .arg(&target)
             .spawn()?;
     }
     

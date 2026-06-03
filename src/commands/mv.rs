@@ -16,25 +16,53 @@ fn copy_dir_recursive(source: &Path, destination: &Path) -> Result<(), Box<dyn s
             copy_dir_recursive(&entry_path, &dest_path)?;
         } else {
             fs::copy(&entry_path, &dest_path)?;
-
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                let metadata = fs::metadata(&entry_path)?;
-                fs::set_permissions(&dest_path, metadata.permissions())?;
-            }
-
-            #[cfg(windows)]
-            {
-                let metadata = fs::metadata(&entry_path)?;
-                let mut perm = fs::metadata(&dest_path)?.permissions();
-                perm.set_readonly(metadata.permissions().readonly());
-                fs::set_permissions(&dest_path, perm)?;
-            }
+            copy_permissions(&entry_path, &dest_path)?;
         }
     }
 
     Ok(())
+}
+
+#[inline]
+fn copy_permissions(source: &Path, dest: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let metadata = fs::metadata(source)?;
+        fs::set_permissions(dest, metadata.permissions())?;
+    }
+
+    #[cfg(windows)]
+    {
+        let metadata = fs::metadata(source)?;
+        let mut perm = fs::metadata(dest)?.permissions();
+        perm.set_readonly(metadata.permissions().readonly());
+        fs::set_permissions(dest, perm)?;
+    }
+
+    Ok(())
+}
+
+#[inline]
+fn format_mv_error(path: &Path, is_dir: bool) -> String {
+    let path_display = path.display().to_string();
+    if is_moe() {
+        format!(
+            "{} {} {} does not exist: {}",
+            "😢💔".truecolor(255, 105, 180),
+            "Error:".truecolor(255, 105, 180),
+            if is_dir { "Destination directory" } else { "Destination parent directory" },
+            path_display.truecolor(255, 182, 193)
+        )
+    } else {
+        format!(
+            "{} {} {} does not exist: {}",
+            "❌".red(),
+            "Error:".red(),
+            if is_dir { "Destination directory" } else { "Destination parent directory" },
+            path_display.bright_red()
+        )
+    }
 }
 
 pub fn cmd_mv(
@@ -56,51 +84,13 @@ pub fn cmd_mv(
 
     let final_dest = if dest_is_dir {
         if !dest_path.exists() {
-            let error_msg = if is_moe() {
-                format!(
-                    "{} {} Destination directory does not exist: {}",
-                    "😢💔".truecolor(255, 105, 180),
-                    "Error:".truecolor(255, 105, 180),
-                    dest_path.display().to_string().truecolor(255, 182, 193)
-                )
-            } else {
-                format!(
-                    "{} {} {}",
-                    "❌".red(),
-                    "Error:".red(),
-                    format!(
-                        "Destination directory does not exist: {}",
-                        dest_path.display()
-                    )
-                    .bright_red()
-                )
-            };
-            return Err(error_msg.into());
+            return Err(format_mv_error(&dest_path, true).into());
         }
         dest_path.join(source_path.file_name().ok_or("Invalid source path")?)
     } else {
         if let Some(parent) = dest_path.parent() {
             if !parent.exists() && parent != Path::new("") {
-                let error_msg = if is_moe() {
-                    format!(
-                        "{} {} Destination parent directory does not exist: {}",
-                        "😢💔".truecolor(255, 105, 180),
-                        "Error:".truecolor(255, 105, 180),
-                        parent.display().to_string().truecolor(255, 182, 193)
-                    )
-                } else {
-                    format!(
-                        "{} {} {}",
-                        "❌".red(),
-                        "Error:".red(),
-                        format!(
-                            "Destination parent directory does not exist: {}",
-                            parent.display()
-                        )
-                        .bright_red()
-                    )
-                };
-                return Err(error_msg.into());
+                return Err(format_mv_error(parent, false).into());
             }
         }
         dest_path.clone()
@@ -114,38 +104,27 @@ pub fn cmd_mv(
         .into());
     }
 
+    let source_display = source_path.display().to_string();
+    let dest_display = final_dest.display().to_string();
+
     let output = if copy {
         if source_metadata.is_dir() {
             copy_dir_recursive(&source_path, &final_dest)?;
             format!(
                 "{} Copied directory {} to {}",
                 "✔".bright_green(),
-                source_path.display().to_string().cyan(),
-                final_dest.display().to_string().cyan()
+                source_display.cyan(),
+                dest_display.cyan()
             )
         } else {
             fs::copy(&source_path, &final_dest)?;
-
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                let mut perm = fs::metadata(&final_dest)?.permissions();
-                perm.set_mode(source_metadata.permissions().mode());
-                fs::set_permissions(&final_dest, perm)?;
-            }
-
-            #[cfg(windows)]
-            {
-                let mut perm = fs::metadata(&final_dest)?.permissions();
-                perm.set_readonly(source_metadata.permissions().readonly());
-                fs::set_permissions(&final_dest, perm)?;
-            }
+            copy_permissions(&source_path, &final_dest)?;
 
             format!(
                 "{} Copied file {} to {}",
                 "✔".bright_green(),
-                source_path.display().to_string().cyan(),
-                final_dest.display().to_string().cyan()
+                source_display.cyan(),
+                dest_display.cyan()
             )
         }
     } else {
@@ -153,13 +132,12 @@ pub fn cmd_mv(
         format!(
             "{} Moved {} to {}",
             "✔".bright_green(),
-            source_path.display().to_string().cyan(),
-            final_dest.display().to_string().cyan()
+            source_display.cyan(),
+            dest_display.cyan()
         )
     };
 
-    let raw_path = final_dest.display().to_string();
-    Ok((output, raw_path))
+    Ok((output, dest_display))
 }
 
 #[cfg(test)]

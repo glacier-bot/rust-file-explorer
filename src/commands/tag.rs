@@ -4,35 +4,55 @@ use std::env;
 use std::path::Path;
 use crate::managers::tag::TagManager;
 
+#[inline]
+fn format_tag_list(tag_manager: &TagManager) -> String {
+    let mut output = String::new();
+    let all_tags = tag_manager.list_all();
+    if all_tags.is_empty() {
+        output.push_str(&format!("  {}\n", "No tagged files yet.".bright_black()));
+    } else {
+        let current_dir = env::current_dir().unwrap_or_default();
+        for (path, tags) in all_tags {
+            let clean_path = clean_windows_path(path);
+            let display_path = match Path::new(&clean_path).strip_prefix(&current_dir) {
+                Ok(rel_path) => rel_path.to_string_lossy().to_string(),
+                Err(_) => clean_path
+            };
+            output.push_str(&format!("  {} -> {}\n", display_path.cyan(), tags.join(", ").bright_yellow()));
+        }
+    }
+    output
+}
+
+#[inline]
+fn clean_windows_path(path: &str) -> String {
+    if cfg!(windows) && path.starts_with("\\\\?\\") {
+        path[4..].to_string()
+    } else {
+        path.to_string()
+    }
+}
+
+#[inline]
+fn format_tag_usage() -> String {
+    let mut output = String::new();
+    output.push_str(&format!("\n{} Usage:\n", "💡".bright_green()));
+    output.push_str(&format!("  {} <file> <tag1> [tag2...] Add tags to file\n", "tag add".cyan().bold()));
+    output.push_str(&format!("  {} <file> <tag1> [tag2...] Remove specified tags from file\n", "tag remove/rm".cyan().bold()));
+    output.push_str(&format!("  {} <file>                Remove all tags from file\n", "tag clear".cyan().bold()));
+    output.push_str(&format!("  {} <file>                Show all tags for file\n", "tag get".cyan().bold()));
+    output.push_str(&format!("  {}                        List all tagged files\n", "tag list/ls".cyan().bold()));
+    output.push_str(&format!("  {} <tag-regex1> [tag-regex2...] Search files by tags\n", "tag find/search".cyan().bold()));
+    output.push_str(&format!("  {}                        Backup tag data\n", "tag backup".cyan().bold()));
+    output.push_str(&format!("  {}                        Restore tag data from backup\n", "tag backup".cyan().bold()));
+    output
+}
+
 pub fn cmd_tag(tag_manager: &mut TagManager, args: &[&str]) -> Result<(String, String), Box<dyn std::error::Error>> {
     if args.is_empty() {
         let mut output = format!("{}\n\n", "🏷️  Tag List:".bright_yellow().bold());
-        let all_tags = tag_manager.list_all();
-        if all_tags.is_empty() {
-            output.push_str(&format!("  {}\n", "No tagged files yet.".bright_black()));
-        } else {
-            for (path, tags) in all_tags {
-                let mut clean_path = path.clone();
-                if cfg!(windows) && clean_path.starts_with("\\\\?\\") {
-                    clean_path = clean_path[4..].to_string();
-                }
-                
-                let display_path = match Path::new(&clean_path).strip_prefix(env::current_dir()?) {
-                    Ok(rel_path) => rel_path.to_string_lossy().to_string(),
-                    Err(_) => clean_path
-                };
-                output.push_str(&format!("  {} -> {}\n", display_path.cyan(), tags.join(", ").bright_yellow()));
-            }
-        }
-        output.push_str(&format!("\n{} Usage:\n", "💡".bright_green()));
-        output.push_str(&format!("  {} <file> <tag1> [tag2...] Add tags to file\n", "tag add".cyan().bold()));
-        output.push_str(&format!("  {} <file> <tag1> [tag2...] Remove specified tags from file\n", "tag remove/rm".cyan().bold()));
-        output.push_str(&format!("  {} <file>                Remove all tags from file\n", "tag clear".cyan().bold()));
-        output.push_str(&format!("  {} <file>                Show all tags for file\n", "tag get".cyan().bold()));
-        output.push_str(&format!("  {}                        List all tagged files\n", "tag list/ls".cyan().bold()));
-        output.push_str(&format!("  {} <tag-regex1> [tag-regex2...] Search files by tags\n", "tag find/search".cyan().bold()));
-        output.push_str(&format!("  {}                        Backup tag data\n", "tag backup".cyan().bold()));
-        output.push_str(&format!("  {}                        Restore tag data from backup\n", "tag restore".cyan().bold()));
+        output.push_str(&format_tag_list(tag_manager));
+        output.push_str(&format_tag_usage());
         return Ok((output, String::new()));
     }
     
@@ -77,23 +97,7 @@ pub fn cmd_tag(tag_manager: &mut TagManager, args: &[&str]) -> Result<(String, S
         }
         "list" | "ls" => {
             let mut output = format!("{}\n\n", "🏷️ Tag List:".bright_yellow().bold());
-            let all_tags = tag_manager.list_all();
-            if all_tags.is_empty() {
-                output.push_str(&format!("  {}\n", "No tagged files yet.".bright_black()));
-            } else {
-                for (path, tags) in all_tags {
-                    let mut clean_path = path.clone();
-                    if cfg!(windows) && clean_path.starts_with("\\\\?\\") {
-                        clean_path = clean_path[4..].to_string();
-                    }
-                    
-                    let display_path = match Path::new(&clean_path).strip_prefix(env::current_dir()?) {
-                        Ok(rel_path) => rel_path.to_string_lossy().to_string(),
-                        Err(_) => clean_path
-                    };
-                    output.push_str(&format!("  {} -> {}\n", display_path.cyan(), tags.join(", ").bright_yellow()));
-                }
-            }
+            output.push_str(&format_tag_list(tag_manager));
             Ok((output, String::new()))
         }
         "backup" => {

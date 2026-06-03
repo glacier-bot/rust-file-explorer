@@ -1,21 +1,35 @@
 use colored::*;
 use crate::managers::alias::AliasManager;
 
+#[inline]
+fn format_alias_list(alias_manager: &AliasManager) -> String {
+    let mut output = String::new();
+    let aliases = alias_manager.list();
+    if aliases.is_empty() {
+        output.push_str(&format!("  {}\n", "No aliases defined yet.".bright_black()));
+    } else {
+        for (alias, path) in aliases {
+            output.push_str(&format!("  {} -> {}\n", format!("@{}", alias).cyan().bold(), path.bright_cyan()));
+        }
+    }
+    output
+}
+
+#[inline]
+fn format_alias_usage() -> String {
+    let mut output = String::new();
+    output.push_str(&format!("\n{} Usage:\n", "💡".bright_green()));
+    output.push_str(&format!("  {}    Add/Update alias\n", "alias add <name> <path>".cyan().bold()));
+    output.push_str(&format!("  {}    Remove alias\n", "alias remove <name>".cyan().bold()));
+    output.push_str(&format!("  {}         List all aliases\n", "alias list".cyan().bold()));
+    output
+}
+
 pub fn cmd_alias(alias_manager: &mut AliasManager, args: &[&str]) -> Result<(String, String), Box<dyn std::error::Error>> {
     if args.is_empty() {
         let mut output = format!("{}\n\n", "📛 Alias List:".bright_yellow().bold());
-        let aliases = alias_manager.list();
-        if aliases.is_empty() {
-            output.push_str(&format!("  {}\n", "No aliases defined yet.".bright_black()));
-        } else {
-            for (alias, path) in aliases {
-                output.push_str(&format!("  {} -> {}\n", format!("@{}", alias).cyan().bold(), path.bright_cyan()));
-            }
-        }
-        output.push_str(&format!("\n{} Usage:\n", "💡".bright_green()));
-        output.push_str(&format!("  {}    Add/Update alias\n", "alias add <name> <path>".cyan().bold()));
-        output.push_str(&format!("  {}    Remove alias\n", "alias remove <name>".cyan().bold()));
-        output.push_str(&format!("  {}         List all aliases\n", "alias list".cyan().bold()));
+        output.push_str(&format_alias_list(alias_manager));
+        output.push_str(&format_alias_usage());
         return Ok((output, String::new()));
     }
     
@@ -39,14 +53,7 @@ pub fn cmd_alias(alias_manager: &mut AliasManager, args: &[&str]) -> Result<(Str
         }
         "list" | "ls" => {
             let mut output = format!("{}\n\n", "📛 Alias List:".bright_yellow().bold());
-            let aliases = alias_manager.list();
-            if aliases.is_empty() {
-                output.push_str(&format!("  {}\n", "No aliases defined yet.".bright_black()));
-            } else {
-                for (alias, path) in aliases {
-                    output.push_str(&format!("  {} -> {}\n", format!("@{}", alias).cyan().bold(), path.bright_cyan()));
-                }
-            }
+            output.push_str(&format_alias_list(alias_manager));
             Ok((output, String::new()))
         }
         _ => {

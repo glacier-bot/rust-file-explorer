@@ -6,14 +6,11 @@ pub fn format_size(size: u64) -> String {
     const MB: u64 = KB * 1024;
     const GB: u64 = MB * 1024;
 
-    if size >= GB {
-        format!("{:>5.1} GB", size as f64 / GB as f64)
-    } else if size >= MB {
-        format!("{:>5.1} MB", size as f64 / MB as f64)
-    } else if size >= KB {
-        format!("{:>5.1} KB", size as f64 / KB as f64)
-    } else {
-        format!("{:>6} B", size)
+    match size {
+        s if s >= GB => format!("{:>5.1} GB", s as f64 / GB as f64),
+        s if s >= MB => format!("{:>5.1} MB", s as f64 / MB as f64),
+        s if s >= KB => format!("{:>5.1} KB", s as f64 / KB as f64),
+        _ => format!("{:>6} B", size),
     }
 }
 
@@ -28,27 +25,15 @@ pub fn format_time_absolute(time: SystemTime) -> String {
             let secs = secs_in_day % 60;
 
             let mut year = 1970;
-            while days >= if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) {
-                366
-            } else {
-                365
-            } {
-                days -= if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) {
-                    366
-                } else {
-                    365
-                };
+            while days >= is_leap_year(year) {
+                days -= is_leap_year(year);
                 year += 1;
             }
 
             let mut month = 1;
             let month_days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
             for &md in month_days.iter() {
-                let adjust = if month == 2 && (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)) {
-                    1
-                } else {
-                    0
-                };
+                let adjust = if month == 2 && is_leap_year(year) == 366 { 1 } else { 0 };
                 if days < md + adjust {
                     break;
                 }
@@ -58,12 +43,18 @@ pub fn format_time_absolute(time: SystemTime) -> String {
 
             let day = days + 1;
 
-            format!(
-                "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
-                year, month, day, hours, mins, secs
-            )
+            format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", year, month, day, hours, mins, secs)
         }
         Err(_) => "                   N/A".to_string(),
+    }
+}
+
+#[inline]
+fn is_leap_year(year: u64) -> u64 {
+    if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) {
+        366
+    } else {
+        365
     }
 }
 
@@ -82,18 +73,7 @@ pub fn truncate_string(s: &str, max_width: usize) -> String {
     let ext_width = ext_part.width();
 
     if ext_width >= available_width {
-        let mut result = String::new();
-        let mut current_width = 0;
-
-        for c in s.chars() {
-            let c_width = c.width().unwrap_or(1);
-            if current_width + c_width > available_width {
-                break;
-            }
-            result.push(c);
-            current_width += c_width;
-        }
-        return result + "...";
+        return truncate_to_width(s, available_width) + "...";
     }
 
     let name_available_width = available_width.saturating_sub(ext_width);
@@ -101,19 +81,24 @@ pub fn truncate_string(s: &str, max_width: usize) -> String {
         return "...".to_string() + ext_part;
     }
 
-    let mut truncated_name = String::new();
+    truncate_to_width(name_part, name_available_width) + "..." + ext_part
+}
+
+#[inline]
+fn truncate_to_width(s: &str, max_width: usize) -> String {
+    let mut result = String::with_capacity(max_width);
     let mut current_width = 0;
 
-    for c in name_part.chars() {
+    for c in s.chars() {
         let c_width = c.width().unwrap_or(1);
-        if current_width + c_width > name_available_width {
+        if current_width + c_width > max_width {
             break;
         }
-        truncated_name.push(c);
+        result.push(c);
         current_width += c_width;
     }
 
-    truncated_name + "..." + ext_part
+    result
 }
 
 fn split_filename(s: &str) -> (&str, &str) {

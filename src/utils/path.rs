@@ -12,10 +12,7 @@ pub fn is_hidden(path: &PathBuf) -> bool {
     #[cfg(windows)]
     {
         use std::os::windows::fs::MetadataExt;
-        match fs::metadata(path) {
-            Ok(meta) => (meta.file_attributes() & 2) != 0,
-            Err(_) => false,
-        }
+        matches!(fs::metadata(path), Ok(meta) if (meta.file_attributes() & 2) != 0)
     }
 }
 
@@ -41,20 +38,23 @@ pub fn pop_path(path: &str, pop_count: usize) -> PopResult {
 
     for _ in 0..pop_count {
         let current_path = path_buf.clone();
-        if let Some(parent) = path_buf.parent() {
-            let parent_str = parent.to_string_lossy();
-            let current_str = current_path.to_string_lossy();
-            
-            if parent_str == current_str {
+        match path_buf.parent() {
+            Some(parent) => {
+                let parent_str = parent.to_string_lossy();
+                let current_str = current_path.to_string_lossy();
+                
+                if parent_str == current_str {
+                    reached_boundary = true;
+                    break;
+                }
+                
+                path_buf = parent.to_path_buf();
+                actual_pops += 1;
+            }
+            None => {
                 reached_boundary = true;
                 break;
             }
-            
-            path_buf = parent.to_path_buf();
-            actual_pops += 1;
-        } else {
-            reached_boundary = true;
-            break;
         }
     }
 
@@ -74,7 +74,7 @@ pub struct ExpandResult {
 }
 
 pub fn expand_pop_placeholders(cmd: &str, previous_raw_data: &str) -> ExpandResult {
-    let mut result = String::with_capacity(cmd.len());
+    let mut result = String::with_capacity(cmd.len() + previous_raw_data.len());
     let chars: Vec<char> = cmd.chars().collect();
     let mut i = 0;
     let mut reached_boundary = false;
@@ -86,28 +86,22 @@ pub fn expand_pop_placeholders(cmd: &str, previous_raw_data: &str) -> ExpandResu
             let mut j = i + 2;
             let mut pop_count = 0;
 
-            while j < chars.len() {
-                if chars[j] == '.' {
-                    if j + 3 <= chars.len()
-                        && chars[j + 1] == 'p'
-                        && chars[j + 2] == 'o'
-                        && chars[j + 3] == 'p'
-                    {
-                        pop_count += 1;
-                        j += 4;
-                    } else {
-                        pop_count += 1;
-                        j += 1;
-                    }
+            while j < chars.len() && chars[j] == '.' {
+                if j + 3 < chars.len()
+                    && chars[j + 1] == 'p'
+                    && chars[j + 2] == 'o'
+                    && chars[j + 3] == 'p'
+                {
+                    pop_count += 1;
+                    j += 4;
                 } else {
-                    break;
+                    pop_count += 1;
+                    j += 1;
                 }
             }
 
             let pop_result = pop_path(previous_raw_data, pop_count);
-            if pop_result.reached_boundary {
-                reached_boundary = true;
-            }
+            reached_boundary |= pop_result.reached_boundary;
             last_actual_pops = pop_result.actual_pops;
             result.push_str(&pop_result.path);
             total_replacements += 1;

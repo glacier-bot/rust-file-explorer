@@ -9,11 +9,7 @@ pub fn cmd_change(args: &[&str]) -> Result<(String, String), Box<dyn std::error:
     match args[0] {
         "-std" | "--std" => {
             if !is_moe() {
-                let output = if is_moe() {
-                    "Already in standard mode 💕".to_string()
-                } else {
-                    format!("{} Already in standard mode ✨", "✓".bright_green())
-                };
+                let output = format!("{} Already in standard mode ✨", "✓".bright_green());
                 return Ok((output, String::new()));
             }
             disable_moe();
@@ -26,15 +22,11 @@ pub fn cmd_change(args: &[&str]) -> Result<(String, String), Box<dyn std::error:
         }
         "-moe" | "--moe" => {
             if is_moe() {
-                let output = if is_moe() {
-                    format!(
-                        "{} {} Already in moe moe mode! 💕✨🌸",
-                        "✓".truecolor(255, 105, 180),
-                        "💖"
-                    )
-                } else {
-                    "Already in moe mode ✨".to_string()
-                };
+                let output = format!(
+                    "{} {} Already in moe moe mode! 💕✨🌸",
+                    "✓".truecolor(255, 105, 180),
+                    "💖"
+                );
                 return Ok((output, String::new()));
             }
             enable_moe();
