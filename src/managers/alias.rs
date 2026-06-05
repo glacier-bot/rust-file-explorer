@@ -71,14 +71,14 @@ impl AliasManager {
     
     pub fn resolve_path(&self, path: &str) -> String {
         if let Some(alias_part) = path.strip_prefix('@') {
-            if let Some((alias_name, rest)) = alias_part.split_once('/') {
+            if let Some(sep_pos) = alias_part.find(['/', '\\']) {
+                let alias_name = &alias_part[..sep_pos];
+                let rest = &alias_part[sep_pos + 1..];
                 if let Some(alias_path) = self.get(alias_name) {
-                    return format!("{}/{}", alias_path, rest);
+                    return PathBuf::from(alias_path).join(rest).display().to_string();
                 }
-            } else {
-                if let Some(alias_path) = self.get(alias_part) {
-                    return alias_path.clone();
-                }
+            } else if let Some(alias_path) = self.get(alias_part) {
+                return alias_path.clone();
             }
         }
         path.to_string()

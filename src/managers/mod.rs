@@ -86,6 +86,12 @@ mod tests {
         
         let resolved = alias_manager.resolve_path("@myfile");
         assert_eq!(resolved, test_file.to_str().unwrap());
+
+        let resolved = alias_manager.resolve_path("@myfile/child.txt");
+        assert_eq!(resolved, test_file.join("child.txt").display().to_string());
+
+        let resolved = alias_manager.resolve_path(r"@myfile\child.txt");
+        assert_eq!(resolved, test_file.join("child.txt").display().to_string());
         
         let resolved = alias_manager.resolve_path("@nonexistent");
         assert_eq!(resolved, "@nonexistent");
