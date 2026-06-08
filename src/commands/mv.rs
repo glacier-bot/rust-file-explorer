@@ -51,7 +51,11 @@ fn format_mv_error(path: &Path, is_dir: bool) -> String {
             "{} {} {} does not exist: {}",
             "😢💔".truecolor(255, 105, 180),
             "Error:".truecolor(255, 105, 180),
-            if is_dir { "Destination directory" } else { "Destination parent directory" },
+            if is_dir {
+                "Destination directory"
+            } else {
+                "Destination parent directory"
+            },
             path_display.truecolor(255, 182, 193)
         )
     } else {
@@ -59,7 +63,11 @@ fn format_mv_error(path: &Path, is_dir: bool) -> String {
             "{} {} {} does not exist: {}",
             "❌".red(),
             "Error:".red(),
-            if is_dir { "Destination directory" } else { "Destination parent directory" },
+            if is_dir {
+                "Destination directory"
+            } else {
+                "Destination parent directory"
+            },
             path_display.bright_red()
         )
     }

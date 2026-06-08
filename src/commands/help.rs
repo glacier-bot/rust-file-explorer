@@ -140,7 +140,9 @@ pub fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
         ));
         output.push_str(&format!(
             "  {}  Move file/folder by ls line number(s) ✨\n",
-            "mv -r <line> <dest> | mv <source> -r <line> | mv -r <line1> -r <line2>".truecolor(255, 182, 193).bold()
+            "mv -r <line> <dest> | mv <source> -r <line> | mv -r <line1> -r <line2>"
+                .truecolor(255, 182, 193)
+                .bold()
         ));
         output.push_str(&format!(
             "  {}    Copy file/folder to destination (preserves original) 💖\n\n",
@@ -440,7 +442,9 @@ pub fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
         ));
         output.push_str(&format!(
             "  {}  Move file/folder by ls line number(s)\n",
-            "mv -r <line> <dest> | mv <source> -r <line> | mv -r <line1> -r <line2>".cyan().bold()
+            "mv -r <line> <dest> | mv <source> -r <line> | mv -r <line1> -r <line2>"
+                .cyan()
+                .bold()
         ));
         output.push_str(&format!(
             "  {}    Copy file/folder to destination (preserves original)\n\n",

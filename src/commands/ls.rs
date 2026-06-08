@@ -9,10 +9,12 @@ use walkdir::WalkDir;
 
 use crate::managers::tag::TagManager;
 use crate::models::FileInfo;
-use crate::utils::format::{center_text, format_size, format_time_absolute, pad_to_width, truncate_string};
-use crate::utils::terminal::{calculate_column_widths, get_terminal_width, make_separator};
-use crate::utils::path::is_hidden;
+use crate::utils::format::{
+    center_text, format_size, format_time_absolute, pad_to_width, truncate_string,
+};
 use crate::utils::moe::is_moe;
+use crate::utils::path::is_hidden;
+use crate::utils::terminal::{calculate_column_widths, get_terminal_width, make_separator};
 
 /// 文件扩展名到图标和颜色的映射
 const FILE_ICONS: &[(&[&str], &str, Color)] = &[
@@ -132,9 +134,9 @@ fn walk_dir_for_regex(
         builder = builder.max_depth(1);
     }
 
-    let walker = builder.into_iter().filter_entry(|e| {
-        all || !is_hidden(&e.path().to_path_buf())
-    });
+    let walker = builder
+        .into_iter()
+        .filter_entry(|e| all || !is_hidden(&e.path().to_path_buf()));
 
     for entry in walker.filter_map(|e| e.ok()) {
         let path = entry.path();
@@ -148,12 +150,14 @@ fn walk_dir_for_regex(
         if pattern.is_match(&path_str) {
             match entry.metadata() {
                 Ok(meta) => {
-                    let name = path.strip_prefix(&current_dir)
+                    let name = path
+                        .strip_prefix(&current_dir)
                         .unwrap_or(path)
                         .to_string_lossy()
                         .to_string();
                     let full_path = path_str.to_string();
-                    let file_info = build_file_info(path, &meta, name, full_path, show_tags, tag_manager);
+                    let file_info =
+                        build_file_info(path, &meta, name, full_path, show_tags, tag_manager);
 
                     if meta.is_dir() {
                         dirs.push(file_info);
@@ -190,7 +194,8 @@ fn walk_dir_for_tags(
             continue;
         }
 
-        let name = path.strip_prefix(&current_dir)
+        let name = path
+            .strip_prefix(&current_dir)
             .unwrap_or(path)
             .to_string_lossy()
             .to_string();
@@ -198,7 +203,8 @@ fn walk_dir_for_tags(
         match entry.metadata() {
             Ok(meta) => {
                 let full_path = path.to_string_lossy().to_string();
-                let file_info = build_file_info(path, &meta, name, full_path, show_tags, tag_manager);
+                let file_info =
+                    build_file_info(path, &meta, name, full_path, show_tags, tag_manager);
 
                 if meta.is_dir() {
                     dirs.push(file_info);
@@ -233,12 +239,13 @@ pub fn cmd_ls(
 
     if re {
         let pattern = path.ok_or("Regex pattern required when using --re flag")?;
-        
+
         let re_pattern = if re_insensitive {
             Regex::new(&format!("(?i){}", pattern))
         } else {
             Regex::new(pattern)
-        }.map_err(|e| format!("Invalid regular expression: {}", e))?;
+        }
+        .map_err(|e| format!("Invalid regular expression: {}", e))?;
 
         let search_dir = if pattern.starts_with('/') || (cfg!(windows) && pattern.contains(':')) {
             PathBuf::from("/")
@@ -260,7 +267,16 @@ pub fn cmd_ls(
             ));
         }
 
-        walk_dir_for_regex(&search_dir, &re_pattern, all, show_tags, recursive, tag_manager, &mut files, &mut dirs)?;
+        walk_dir_for_regex(
+            &search_dir,
+            &re_pattern,
+            all,
+            show_tags,
+            recursive,
+            tag_manager,
+            &mut files,
+            &mut dirs,
+        )?;
     } else {
         let target = match path {
             Some(p) => PathBuf::from(p),
@@ -302,7 +318,8 @@ pub fn cmd_ls(
                 match entry.metadata() {
                     Ok(meta) => {
                         let full_path = path.to_string_lossy().to_string();
-                        let file_info = build_file_info(&path, &meta, name, full_path, show_tags, tag_manager);
+                        let file_info =
+                            build_file_info(&path, &meta, name, full_path, show_tags, tag_manager);
 
                         if meta.is_dir() {
                             dirs.push(file_info);
@@ -325,7 +342,7 @@ pub fn cmd_ls(
     let mut all_items = Vec::with_capacity(dirs.len() + files.len());
     all_items.extend(dirs);
     all_items.extend(files);
-    
+
     if !tag_patterns.is_empty() {
         let current_dir = env::current_dir().unwrap_or_default();
         all_items.retain(|item| {
@@ -367,17 +384,19 @@ pub fn cmd_ls(
             file_count.to_string().bright_cyan()
         ));
     }
-    
+
     let raw_path = if re {
         let search_dir = match path {
-            Some(p) if p.starts_with('/') || (cfg!(windows) && p.contains(':')) => PathBuf::from("/"),
-            _ => env::current_dir()?
+            Some(p) if p.starts_with('/') || (cfg!(windows) && p.contains(':')) => {
+                PathBuf::from("/")
+            }
+            _ => env::current_dir()?,
         };
         search_dir.display().to_string()
     } else {
         match path {
             Some(p) => PathBuf::from(p).display().to_string(),
-            None => env::current_dir()?.display().to_string()
+            None => env::current_dir()?.display().to_string(),
         }
     };
 
@@ -386,12 +405,19 @@ pub fn cmd_ls(
 
 fn render_long_format(output: &mut String, all_items: &[FileInfo], show_tags: bool) {
     let term_width = get_terminal_width();
-    let (name_width, created_width, modified_width, size_width, tags_width) = 
+    let (name_width, created_width, modified_width, size_width, tags_width) =
         calculate_column_widths(term_width, show_tags);
     let truncate_name_width = name_width.saturating_sub(4);
 
     if show_tags {
-        let widths = [3, name_width, created_width, modified_width, size_width, tags_width];
+        let widths = [
+            3,
+            name_width,
+            created_width,
+            modified_width,
+            size_width,
+            tags_width,
+        ];
         let separator = make_separator(&widths).bright_black();
 
         output.push_str(&format!("{}\n", separator));
@@ -399,8 +425,12 @@ fn render_long_format(output: &mut String, all_items: &[FileInfo], show_tags: bo
             "| {:^3} | {} | {} | {} | {} | {} |\n",
             "#".bright_white().bold(),
             center_text("Name", name_width).bright_white().bold(),
-            center_text("Created Date", created_width).bright_white().bold(),
-            center_text("Modified Date", modified_width).bright_white().bold(),
+            center_text("Created Date", created_width)
+                .bright_white()
+                .bold(),
+            center_text("Modified Date", modified_width)
+                .bright_white()
+                .bold(),
             center_text("Size", size_width).bright_white().bold(),
             center_text("Tags", tags_width).bright_white().bold(),
         ));
@@ -408,7 +438,9 @@ fn render_long_format(output: &mut String, all_items: &[FileInfo], show_tags: bo
 
         for (idx, item) in all_items.iter().enumerate() {
             let line_num = idx + 1;
-            let created_str = item.created.map_or_else(|| "N/A".to_string(), format_time_absolute);
+            let created_str = item
+                .created
+                .map_or_else(|| "N/A".to_string(), format_time_absolute);
             let modified_str = format_time_absolute(item.modified);
             let tags_str = if item.tags.is_empty() {
                 String::new()
@@ -431,9 +463,16 @@ fn render_long_format(output: &mut String, all_items: &[FileInfo], show_tags: bo
                 "| {:3} | {} | {} | {} | {} | {} |\n",
                 line_num,
                 padded_name.color(item.color).bold(),
-                pad_to_width(&truncate_string(&created_str, created_width), created_width).bright_cyan(),
-                pad_to_width(&truncate_string(&modified_str, modified_width), modified_width).bright_magenta(),
-                pad_to_width(&format_size(item.size), size_width).bright_yellow().bold(),
+                pad_to_width(&truncate_string(&created_str, created_width), created_width)
+                    .bright_cyan(),
+                pad_to_width(
+                    &truncate_string(&modified_str, modified_width),
+                    modified_width
+                )
+                .bright_magenta(),
+                pad_to_width(&format_size(item.size), size_width)
+                    .bright_yellow()
+                    .bold(),
                 padded_tags.bright_yellow()
             ));
         }
@@ -448,15 +487,21 @@ fn render_long_format(output: &mut String, all_items: &[FileInfo], show_tags: bo
             "| {:^3} | {} | {} | {} | {} |\n",
             "#".bright_white().bold(),
             center_text("Name", name_width).bright_white().bold(),
-            center_text("Created Date", created_width).bright_white().bold(),
-            center_text("Modified Date", modified_width).bright_white().bold(),
+            center_text("Created Date", created_width)
+                .bright_white()
+                .bold(),
+            center_text("Modified Date", modified_width)
+                .bright_white()
+                .bold(),
             center_text("Size", size_width).bright_white().bold(),
         ));
         output.push_str(&format!("{}\n", separator));
 
         for (idx, item) in all_items.iter().enumerate() {
             let line_num = idx + 1;
-            let created_str = item.created.map_or_else(|| "N/A".to_string(), format_time_absolute);
+            let created_str = item
+                .created
+                .map_or_else(|| "N/A".to_string(), format_time_absolute);
             let modified_str = format_time_absolute(item.modified);
 
             let display_name = truncate_string(&item.name, truncate_name_width);
@@ -473,9 +518,16 @@ fn render_long_format(output: &mut String, all_items: &[FileInfo], show_tags: bo
                 "| {:3} | {} | {} | {} | {} |\n",
                 line_num,
                 padded_name.color(item.color).bold(),
-                pad_to_width(&truncate_string(&created_str, created_width), created_width).bright_cyan(),
-                pad_to_width(&truncate_string(&modified_str, modified_width), modified_width).bright_magenta(),
-                pad_to_width(&format_size(item.size), size_width).bright_yellow().bold()
+                pad_to_width(&truncate_string(&created_str, created_width), created_width)
+                    .bright_cyan(),
+                pad_to_width(
+                    &truncate_string(&modified_str, modified_width),
+                    modified_width
+                )
+                .bright_magenta(),
+                pad_to_width(&format_size(item.size), size_width)
+                    .bright_yellow()
+                    .bold()
             ));
         }
 
@@ -489,9 +541,20 @@ fn render_short_format(output: &mut String, all_items: &[FileInfo], show_tags: b
         let display_name = truncate_string(&item.name, 50);
         if show_tags && !item.tags.is_empty() {
             let tags_str = format!(" [{}]", item.tags.join(", "));
-            output.push_str(&format!("{:3}. {} {}{}\n", line_num, item.icon, display_name.color(item.color).bold(), tags_str.bright_yellow()));
+            output.push_str(&format!(
+                "{:3}. {} {}{}\n",
+                line_num,
+                item.icon,
+                display_name.color(item.color).bold(),
+                tags_str.bright_yellow()
+            ));
         } else {
-            output.push_str(&format!("{:3}. {} {}\n", line_num, item.icon, display_name.color(item.color).bold()));
+            output.push_str(&format!(
+                "{:3}. {} {}\n",
+                line_num,
+                item.icon,
+                display_name.color(item.color).bold()
+            ));
         }
     }
 }
