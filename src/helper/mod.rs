@@ -13,6 +13,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use crate::cache::{cache_dir_entries, get_cached_dir_entries};
+use crate::completion::{CompletionContext, CompletionManager};
 use crate::managers::alias::AliasManager;
 use crate::managers::tag::TagManager;
 use crate::models::FileInfo;
@@ -49,13 +50,15 @@ pub struct RfeHelper {
     pub tag_manager: Arc<Mutex<TagManager>>,
     /// 最近一次ls的条目
     pub last_ls_items: Arc<Mutex<Vec<FileInfo>>>,
+    /// 命令补全管理器
+    pub completion_manager: CompletionManager,
 }
 
 impl Completer for RfeHelper {
     type Candidate = Pair;
 
     /// 实现命令补全功能
-    /// 支持路径别名补全和标签补全
+    /// 支持命令名、参数、路径别名、标签等补全
     fn complete(
         &self,
         line: &str,
@@ -63,6 +66,172 @@ impl Completer for RfeHelper {
         ctx: &Context<'_>,
     ) -> Result<(usize, Vec<Pair>), ReadlineError> {
         let current_word = &line[..pos];
+        let is_moe = crate::utils::moe::is_moe();
+
+        // 使用 CompletionManager 解析当前输入上下文
+        let context = self.completion_manager.parse_input_for_completion(line, pos);
+
+        match context {
+            // 命令名补全
+            CompletionContext::CommandName(prefix) => {
+                let completions = self.completion_manager.get_command_completions(&prefix);
+                if !completions.is_empty() {
+                    let start_pos = pos - prefix.len();
+                    let candidates: Vec<Pair> = completions
+                        .into_iter()
+                        .map(|(name, desc)| {
+                            if is_moe {
+                                // Moe 模式：使用粉色系
+                                Pair {
+                                    display: format!(
+                                        "{}  {}",
+                                        name.truecolor(255, 105, 180).bold(),
+                                        desc.truecolor(255, 182, 193).dimmed()
+                                    ),
+                                    replacement: name,
+                                }
+                            } else {
+                                // Std 模式：使用绿色系
+                                Pair {
+                                    display: format!("{}  {}", name.bright_green().bold(), desc.dimmed()),
+                                    replacement: name,
+                                }
+                            }
+                        })
+                        .collect();
+                    return Ok((start_pos, candidates));
+                }
+            }
+
+            // 命令参数补全
+            CompletionContext::CommandArg(cmd_name, arg_prefix) => {
+                if let Some(cmd) = self.completion_manager.get_command(&cmd_name) {
+                    let completions = cmd.get_arg_completions(&arg_prefix);
+                    if !completions.is_empty() {
+                        let start_pos = pos - arg_prefix.len();
+                        let candidates: Vec<Pair> = completions
+                            .into_iter()
+                            .map(|(name, desc)| {
+                                if is_moe {
+                                    // Moe 模式：使用紫色系
+                                    Pair {
+                                        display: format!(
+                                            "{}  {}",
+                                            name.truecolor(186, 85, 211).bold(),
+                                            desc.truecolor(255, 182, 193).dimmed()
+                                        ),
+                                        replacement: name,
+                                    }
+                                } else {
+                                    // Std 模式：使用蓝色系
+                                    Pair {
+                                        display: format!("{}  {}", name.bright_blue().bold(), desc.dimmed()),
+                                        replacement: name,
+                                    }
+                                }
+                            })
+                            .collect();
+                        return Ok((start_pos, candidates));
+                    }
+                }
+            }
+
+            // 子命令补全
+            CompletionContext::Subcommand(cmd_name, subcmd_prefix) => {
+                if let Some(cmd) = self.completion_manager.get_command(&cmd_name) {
+                    let completions = cmd.get_subcommand_completions(&subcmd_prefix);
+                    if !completions.is_empty() {
+                        let start_pos = pos - subcmd_prefix.len();
+                        let candidates: Vec<Pair> = completions
+                            .into_iter()
+                            .map(|(name, desc)| {
+                                if is_moe {
+                                    // Moe 模式：使用橙色系
+                                    Pair {
+                                        display: format!(
+                                            "{}  {}",
+                                            name.truecolor(255, 165, 0).bold(),
+                                            desc.truecolor(255, 182, 193).dimmed()
+                                        ),
+                                        replacement: name,
+                                    }
+                                } else {
+                                    // Std 模式：使用黄色系
+                                    Pair {
+                                        display: format!("{}  {}", name.bright_yellow().bold(), desc.dimmed()),
+                                        replacement: name,
+                                    }
+                                }
+                            })
+                            .collect();
+                        return Ok((start_pos, candidates));
+                    }
+                }
+            }
+
+            // 标签补全
+            CompletionContext::Tag => {
+                let parts: Vec<&str> = line[..pos].split_whitespace().collect();
+                let tag_prefix = parts.last().unwrap_or(&"");
+                let tag_manager = self.tag_manager.lock().unwrap();
+                let mut candidates = Vec::new();
+                for tag in tag_manager.get_all_tags() {
+                    if tag.starts_with(tag_prefix) {
+                        let display = if is_moe {
+                            tag.truecolor(255, 105, 180).to_string()
+                        } else {
+                            tag.bright_cyan().to_string()
+                        };
+                        candidates.push(Pair {
+                            display,
+                            replacement: tag,
+                        });
+                    }
+                }
+                if !candidates.is_empty() {
+                    let start_pos = pos - tag_prefix.len();
+                    return Ok((start_pos, candidates));
+                }
+            }
+
+            // 子命令参数补全
+            CompletionContext::SubcommandArg(cmd_name, _subcmd_name, arg_prefix) => {
+                if let Some(cmd) = self.completion_manager.get_command(&cmd_name) {
+                    for subcmd in &cmd.subcommands {
+                        if subcmd.name == _subcmd_name || subcmd.aliases.contains(&_subcmd_name) {
+                            let completions = subcmd.get_arg_completions(&arg_prefix);
+                            if !completions.is_empty() {
+                                let start_pos = pos - arg_prefix.len();
+                                let candidates: Vec<Pair> = completions
+                                    .into_iter()
+                                    .map(|(name, desc)| {
+                                        if is_moe {
+                                            Pair {
+                                                display: format!(
+                                                    "{}  {}",
+                                                    name.truecolor(186, 85, 211).bold(),
+                                                    desc.truecolor(255, 182, 193).dimmed()
+                                                ),
+                                                replacement: name,
+                                            }
+                                        } else {
+                                            Pair {
+                                                display: format!("{}  {}", name.bright_blue().bold(), desc.dimmed()),
+                                                replacement: name,
+                                            }
+                                        }
+                                    })
+                                    .collect();
+                                return Ok((start_pos, candidates));
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 路径补全由后面的逻辑处理
+            CompletionContext::Path | CompletionContext::Unknown => {}
+        }
         
         // cd -r <行号>/<子路径> 补全
         let parts: Vec<&str> = line.split_whitespace().collect();
@@ -509,6 +678,80 @@ impl Highlighter for RfeHelper {
 
 impl Hinter for RfeHelper {
     type Hint = String;
+
+    /// 提供输入提示（内联显示，可通过右方向键或 Tab 接受）
+    fn hint(&self, line: &str, pos: usize, _ctx: &Context<'_>) -> Option<Self::Hint> {
+        // 空行不显示提示
+        if line.is_empty() || pos == 0 {
+            return None;
+        }
+
+        let context = self.completion_manager.parse_input_for_completion(line, pos);
+
+        match context {
+            // 命令名提示：显示第一个匹配的命令作为内联提示
+            // 注意：Hinter 返回纯文本，因为 Rustyline 内部计算显示宽度时不识别 ANSI 代码
+            // 颜色样式由 Highlighter trait 处理
+            CompletionContext::CommandName(ref prefix) if !prefix.is_empty() => {
+                let completions = self.completion_manager.get_command_completions(prefix);
+                if let Some((name, _desc)) = completions.first() {
+                    let hint = if name.starts_with(prefix) {
+                        name[prefix.len()..].to_string()
+                    } else {
+                        name.clone()
+                    };
+                    // 返回纯文本，不带 ANSI 颜色代码，避免光标位置计算错误
+                    Some(hint)
+                } else {
+                    None
+                }
+            }
+
+            // 命令参数提示：显示第一个匹配的参数作为内联提示
+            CompletionContext::CommandArg(ref cmd_name, ref arg_prefix) => {
+                if let Some(cmd) = self.completion_manager.get_command(cmd_name) {
+                    let completions = cmd.get_arg_completions(arg_prefix);
+                    if let Some((name, _desc)) = completions.first() {
+                        let hint = if arg_prefix.is_empty() {
+                            name.clone()
+                        } else if name.starts_with(arg_prefix) {
+                            name[arg_prefix.len()..].to_string()
+                        } else {
+                            name.clone()
+                        };
+                        Some(hint)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+
+            // 子命令提示：显示第一个匹配的子命令作为内联提示
+            CompletionContext::Subcommand(ref cmd_name, ref subcmd_prefix) => {
+                if let Some(cmd) = self.completion_manager.get_command(cmd_name) {
+                    let completions = cmd.get_subcommand_completions(subcmd_prefix);
+                    if let Some((name, _desc)) = completions.first() {
+                        let hint = if subcmd_prefix.is_empty() {
+                            name.clone()
+                        } else if name.starts_with(subcmd_prefix) {
+                            name[subcmd_prefix.len()..].to_string()
+                        } else {
+                            name.clone()
+                        };
+                        Some(hint)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+
+            _ => None,
+        }
+    }
 }
 
 impl Validator for RfeHelper {}
@@ -525,6 +768,7 @@ mod tests {
             alias_manager: Arc::new(Mutex::new(AliasManager::new().unwrap())),
             tag_manager: Arc::new(Mutex::new(TagManager::new().unwrap())),
             last_ls_items: Arc::new(Mutex::new(Vec::new())),
+            completion_manager: CompletionManager::new(),
         }
     }
 

@@ -3,6 +3,7 @@ use std::env;
 mod app;
 mod cache;
 mod commands;
+mod completion;
 mod helper;
 mod managers;
 mod messaging;

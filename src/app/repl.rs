@@ -2,6 +2,7 @@
 //! 负责交互式命令行循环、输入读取、历史记录和 cd 选择处理
 
 use crate::app::pipeline::{execute_command, CommandResult};
+use crate::completion::CompletionManager;
 use crate::helper::RfeHelper;
 use crate::managers::{alias::AliasManager, tag::TagManager};
 use crate::messaging;
@@ -47,6 +48,7 @@ pub fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
         alias_manager: Arc::clone(&alias_manager),
         tag_manager: Arc::clone(&tag_manager),
         last_ls_items: Arc::clone(&last_ls_items),
+        completion_manager: CompletionManager::new(),
     };
 
     let mut rl = rustyline::Editor::new()?;
@@ -55,6 +57,10 @@ pub fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
         KeyEvent(KeyCode::Esc, rustyline::Modifiers::NONE),
         Cmd::Kill(Movement::WholeLine),
     );
+
+    // 右方向键：如果光标在行尾则接受提示，否则正常移动
+    // 注意：rustyline 默认右方向键在行尾时接受内联提示
+    // 如果需要自定义行为，可以通过 Cmd::MoveForwardChar 或其他方式处理
 
     rl.set_helper(Some(helper));
 
