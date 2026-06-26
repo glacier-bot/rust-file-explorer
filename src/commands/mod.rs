@@ -11,6 +11,7 @@ pub mod alias;
 pub mod cd;
 pub mod change;
 pub mod clear;
+pub mod cli;
 pub mod clipboard;
 pub mod help;
 pub mod ls;
@@ -18,6 +19,7 @@ pub mod mkdf;
 pub mod mv;
 pub mod open;
 pub mod pwd;
+pub mod render;
 pub mod tag;
 pub mod welcome;
 

@@ -11,6 +11,10 @@ mod models;
 mod resolver;
 mod utils;
 
+use crate::commands::cli::{
+    parse_cd_args, parse_cpf_arg, parse_ls_args, parse_mv_args, parse_open_arg, get_alias_args,
+    get_change_args, get_mkdf_args, get_tag_args,
+};
 use crate::managers::{alias::AliasManager, tag::TagManager};
 use crate::utils::moe;
 
@@ -36,39 +40,18 @@ fn run_direct_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error
             Ok((display, raw))
         }
         "cpf" => {
-            let path = args
-                .get(arg_offset + 1)
-                .map(|s| s.as_str())
-                .ok_or("Usage: rfe cpf <file>")?;
-            let resolved_path = alias_manager.resolve_path(path);
-            commands::clipboard::cmd_cpf(&resolved_path)
+            let path = parse_cpf_arg(&args, arg_offset, &alias_manager)?;
+            commands::clipboard::cmd_cpf(&path)
         }
         "cd" => {
-            let mut is_idx = false;
-            let mut idx_tag: Option<String> = None;
-            let mut path: Option<String> = None;
+            let cd_args = parse_cd_args(&args, arg_offset, &alias_manager)?;
 
-            let mut i = arg_offset + 1;
-            while i < args.len() {
-                match args[i].as_str() {
-                    "-idx" => {
-                        is_idx = true;
-                        if i + 1 < args.len() {
-                            idx_tag = Some(args[i + 1].clone());
-                            i += 1;
-                        }
-                    }
-                    p => path = Some(alias_manager.resolve_path(p)),
-                }
-                i += 1;
-            }
-
-            if is_idx {
+            if cd_args.is_idx {
                 match commands::cd::cmd_cd(
                     None,
                     None,
                     true,
-                    idx_tag.as_deref(),
+                    cd_args.idx_tag.as_deref(),
                     Some(&tag_manager),
                     None,
                 )? {
@@ -114,132 +97,41 @@ fn run_direct_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error
                     }
                 }
             } else {
-                match commands::cd::cmd_cd(path.as_deref(), None, false, None, None, None)? {
+                match commands::cd::cmd_cd(cd_args.path.as_deref(), None, false, None, None, None)? {
                     commands::cd::CdResult::Success(display, raw, _) => Ok((display, raw)),
                     commands::cd::CdResult::NeedSelection(_) => Err("Unexpected error".into()),
                 }
             }
         }
         "ls" => {
-            let mut all = false;
-            let mut long = false;
-            let mut re = false;
-            let mut re_insensitive = false;
-            let mut show_tags = false;
-            let mut recursive = false;
-            let mut path: Option<String> = None;
-            let mut tag_pattern_strs: Vec<String> = Vec::new();
-
-            let mut i = arg_offset + 1;
-            while i < args.len() {
-                match args[i].as_str() {
-                    "-a" | "--all" => all = true,
-                    "-l" | "--long" => long = true,
-                    "-la" | "-al" => {
-                        all = true;
-                        long = true;
-                    }
-                    "--re" => re = true,
-                    "--re-deep" => {
-                        re = true;
-                        recursive = true;
-                    }
-                    "--re-insensitive" => re_insensitive = true,
-                    "--xcaps" => re_insensitive = true,
-                    "-tag" | "--tags" => show_tags = true,
-                    "-t" | "--tag" => {
-                        if i + 1 < args.len() {
-                            if args[i + 1] == "--deep" && i + 2 < args.len() {
-                                recursive = true;
-                                tag_pattern_strs.push(args[i + 2].clone());
-                                i += 2;
-                            } else {
-                                tag_pattern_strs.push(args[i + 1].clone());
-                                i += 1;
-                            }
-                        } else {
-                            return Err(
-                                "Tag query parameter requires a pattern, usage: ls -t <tag_regex>"
-                                    .into(),
-                            );
-                        }
-                    }
-                    p => path = Some(alias_manager.resolve_path(p)),
-                }
-                i += 1;
-            }
-
-            let mut tag_patterns = Vec::new();
-            for pattern_str in tag_pattern_strs {
-                match regex::Regex::new(&pattern_str) {
-                    Ok(re) => tag_patterns.push(re),
-                    Err(e) => return Err(format!("Invalid tag regex: {}", e).into()),
-                }
-            }
-
+            let ls_args = parse_ls_args(&args, arg_offset, &alias_manager)?;
             commands::ls::cmd_ls(
-                all,
-                long,
-                re,
-                re_insensitive,
-                show_tags,
-                recursive,
-                path.as_deref(),
+                ls_args.all,
+                ls_args.long,
+                ls_args.re,
+                ls_args.re_insensitive,
+                ls_args.show_tags,
+                ls_args.recursive,
+                ls_args.path.as_deref(),
                 &tag_manager,
-                &tag_patterns,
+                &ls_args.tag_patterns,
             )
             .map(|(display, raw, _items)| (display, raw))
         }
         "open" => {
-            let path = args
-                .get(arg_offset + 1)
-                .map(|s| s.as_str())
-                .ok_or("Usage: rfe open <file>")?;
-            let resolved_path = alias_manager.resolve_path(path);
-            commands::open::cmd_open(&resolved_path)
+            let path = parse_open_arg(&args, arg_offset, &alias_manager)?;
+            commands::open::cmd_open(&path)
         }
         "mv" => {
-            let mut source: Option<String> = None;
-            let mut destination: Option<String> = None;
-            let mut copy = false;
-
-            let mut i = arg_offset + 1;
-            while i < args.len() {
-                match args[i].as_str() {
-                    "--cp" => {
-                        copy = true;
-                        i += 1;
-                    }
-                    "-r" => {
-                        if i + 1 >= args.len() {
-                            return Err("Missing path after -r parameter".into());
-                        }
-                        return Err("-r parameter is only available in REPL mode (interactive mode)".into());
-                    }
-                    part => {
-                        let resolved = alias_manager.resolve_path(part);
-                        if source.is_none() {
-                            source = Some(resolved);
-                        } else if destination.is_none() {
-                            destination = Some(resolved);
-                        }
-                        i += 1;
-                    }
-                }
-            }
-
-            let source = source.ok_or("Usage: rfe mv <source_path> <destination_path> [--cp]")?;
-            let destination =
-                destination.ok_or("Usage: rfe mv <source_path> <destination_path> [--cp]")?;
-
-            commands::mv::cmd_mv(&source, &destination, copy)
+            let mv_args = parse_mv_args(&args, arg_offset, &alias_manager)?;
+            commands::mv::cmd_mv(&mv_args.source, &mv_args.destination, mv_args.copy)
         }
         "alias" => {
-            let alias_args: Vec<&str> = args[arg_offset + 1..].iter().map(|s| s.as_str()).collect();
+            let alias_args = get_alias_args(&args, arg_offset);
             commands::alias::cmd_alias(&mut alias_manager, &alias_args)
         }
         "tag" | "t" => {
-            let tag_args: Vec<&str> = args[arg_offset + 1..].iter().map(|s| s.as_str()).collect();
+            let tag_args = get_tag_args(&args, arg_offset);
             commands::tag::cmd_tag(&mut tag_manager, &tag_args)
         }
         "exit" => {
@@ -250,12 +142,11 @@ fn run_direct_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error
         "help" => commands::help::cmd_help(),
         "welcome" => commands::welcome::cmd_welcome(),
         "mkdf" => {
-            let mkdf_args: Vec<&str> = args[arg_offset + 1..].iter().map(|s| s.as_str()).collect();
+            let mkdf_args = get_mkdf_args(&args, arg_offset);
             commands::mkdf::cmd_mkdf(&mkdf_args)
         }
         "change" => {
-            let change_args: Vec<&str> =
-                args[arg_offset + 1..].iter().map(|s| s.as_str()).collect();
+            let change_args = get_change_args(&args, arg_offset);
             commands::change::cmd_change(&change_args)
         }
         _ => {

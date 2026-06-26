@@ -4,17 +4,12 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-use unicode_width::UnicodeWidthStr;
 use walkdir::WalkDir;
 
 use crate::managers::tag::TagManager;
 use crate::models::FileInfo;
-use crate::utils::format::{
-    center_text, format_size, format_time_absolute, pad_to_width, truncate_string,
-};
 use crate::utils::moe::is_moe;
 use crate::utils::path::is_hidden;
-use crate::utils::terminal::{calculate_column_widths, get_terminal_width, make_separator};
 
 /// 文件扩展名到图标和颜色的映射
 const FILE_ICONS: &[(&[&str], &str, Color)] = &[
@@ -359,9 +354,9 @@ pub fn cmd_ls(
     }
 
     if long {
-        render_long_format(&mut output, &all_items, show_tags);
+        crate::commands::render::render_long_format(&mut output, &all_items, show_tags);
     } else {
-        render_short_format(&mut output, &all_items, show_tags);
+        crate::commands::render::render_short_format(&mut output, &all_items, show_tags);
     }
 
     output.push('\n');
@@ -401,160 +396,4 @@ pub fn cmd_ls(
     };
 
     Ok((output, raw_path, all_items))
-}
-
-fn render_long_format(output: &mut String, all_items: &[FileInfo], show_tags: bool) {
-    let term_width = get_terminal_width();
-    let (name_width, created_width, modified_width, size_width, tags_width) =
-        calculate_column_widths(term_width, show_tags);
-    let truncate_name_width = name_width.saturating_sub(4);
-
-    if show_tags {
-        let widths = [
-            3,
-            name_width,
-            created_width,
-            modified_width,
-            size_width,
-            tags_width,
-        ];
-        let separator = make_separator(&widths).bright_black();
-
-        output.push_str(&format!("{}\n", separator));
-        output.push_str(&format!(
-            "| {:^3} | {} | {} | {} | {} | {} |\n",
-            "#".bright_white().bold(),
-            center_text("Name", name_width).bright_white().bold(),
-            center_text("Created Date", created_width)
-                .bright_white()
-                .bold(),
-            center_text("Modified Date", modified_width)
-                .bright_white()
-                .bold(),
-            center_text("Size", size_width).bright_white().bold(),
-            center_text("Tags", tags_width).bright_white().bold(),
-        ));
-        output.push_str(&format!("{}\n", separator));
-
-        for (idx, item) in all_items.iter().enumerate() {
-            let line_num = idx + 1;
-            let created_str = item
-                .created
-                .map_or_else(|| "N/A".to_string(), format_time_absolute);
-            let modified_str = format_time_absolute(item.modified);
-            let tags_str = if item.tags.is_empty() {
-                String::new()
-            } else {
-                item.tags.join(", ")
-            };
-
-            let display_name = truncate_string(&item.name, truncate_name_width);
-            let display_text = format!("{}  {}", item.icon, display_name);
-            let display_text_width = display_text.width();
-            let padding = if display_text_width < name_width {
-                " ".repeat(name_width - display_text_width)
-            } else {
-                String::new()
-            };
-            let padded_name = format!("{}{}", display_text, padding);
-            let padded_tags = pad_to_width(&truncate_string(&tags_str, tags_width), tags_width);
-
-            output.push_str(&format!(
-                "| {:3} | {} | {} | {} | {} | {} |\n",
-                line_num,
-                padded_name.color(item.color).bold(),
-                pad_to_width(&truncate_string(&created_str, created_width), created_width)
-                    .bright_cyan(),
-                pad_to_width(
-                    &truncate_string(&modified_str, modified_width),
-                    modified_width
-                )
-                .bright_magenta(),
-                pad_to_width(&format_size(item.size), size_width)
-                    .bright_yellow()
-                    .bold(),
-                padded_tags.bright_yellow()
-            ));
-        }
-
-        output.push_str(&format!("{}\n", separator));
-    } else {
-        let widths = [3, name_width, created_width, modified_width, size_width];
-        let separator = make_separator(&widths).bright_black();
-
-        output.push_str(&format!("{}\n", separator));
-        output.push_str(&format!(
-            "| {:^3} | {} | {} | {} | {} |\n",
-            "#".bright_white().bold(),
-            center_text("Name", name_width).bright_white().bold(),
-            center_text("Created Date", created_width)
-                .bright_white()
-                .bold(),
-            center_text("Modified Date", modified_width)
-                .bright_white()
-                .bold(),
-            center_text("Size", size_width).bright_white().bold(),
-        ));
-        output.push_str(&format!("{}\n", separator));
-
-        for (idx, item) in all_items.iter().enumerate() {
-            let line_num = idx + 1;
-            let created_str = item
-                .created
-                .map_or_else(|| "N/A".to_string(), format_time_absolute);
-            let modified_str = format_time_absolute(item.modified);
-
-            let display_name = truncate_string(&item.name, truncate_name_width);
-            let display_text = format!("{}  {}", item.icon, display_name);
-            let display_text_width = display_text.width();
-            let padding = if display_text_width < name_width {
-                " ".repeat(name_width - display_text_width)
-            } else {
-                String::new()
-            };
-            let padded_name = format!("{}{}", display_text, padding);
-
-            output.push_str(&format!(
-                "| {:3} | {} | {} | {} | {} |\n",
-                line_num,
-                padded_name.color(item.color).bold(),
-                pad_to_width(&truncate_string(&created_str, created_width), created_width)
-                    .bright_cyan(),
-                pad_to_width(
-                    &truncate_string(&modified_str, modified_width),
-                    modified_width
-                )
-                .bright_magenta(),
-                pad_to_width(&format_size(item.size), size_width)
-                    .bright_yellow()
-                    .bold()
-            ));
-        }
-
-        output.push_str(&format!("{}\n", separator));
-    }
-}
-
-fn render_short_format(output: &mut String, all_items: &[FileInfo], show_tags: bool) {
-    for (idx, item) in all_items.iter().enumerate() {
-        let line_num = idx + 1;
-        let display_name = truncate_string(&item.name, 50);
-        if show_tags && !item.tags.is_empty() {
-            let tags_str = format!(" [{}]", item.tags.join(", "));
-            output.push_str(&format!(
-                "{:3}. {} {}{}\n",
-                line_num,
-                item.icon,
-                display_name.color(item.color).bold(),
-                tags_str.bright_yellow()
-            ));
-        } else {
-            output.push_str(&format!(
-                "{:3}. {} {}\n",
-                line_num,
-                item.icon,
-                display_name.color(item.color).bold()
-            ));
-        }
-    }
 }
