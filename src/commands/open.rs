@@ -1,9 +1,10 @@
 use crate::commands::cd::CdSelectionItem;
 use crate::managers::tag::TagManager;
+use crate::messaging;
 use colored::*;
 use regex::Regex;
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 pub fn cmd_open(path: &str) -> Result<(String, String), Box<dyn std::error::Error>> {
@@ -120,6 +121,10 @@ pub fn cmd_open_tag(
 
     if matching_files.len() == 1 {
         let item = &matching_files[0];
+        let target = PathBuf::from(&item.full_path);
+        if target.is_dir() {
+            check_index_file(&target);
+        }
         let (display, raw) = cmd_open(&item.full_path)?;
         return Ok(OpenResult::Success(display, raw));
     }
@@ -134,9 +139,20 @@ pub fn cmd_open_tag(
         }
 
         let item = &matching_files[sel - 1];
+        let target = PathBuf::from(&item.full_path);
+        if target.is_dir() {
+            check_index_file(&target);
+        }
         let (display, raw) = cmd_open(&item.full_path)?;
         return Ok(OpenResult::Success(display, raw));
     }
 
     Ok(OpenResult::NeedSelection(matching_files))
+}
+
+fn check_index_file(dir_path: &Path) {
+    let index_path = dir_path.join(".index");
+    if !index_path.exists() {
+        messaging::print_missing_index_warning(&dir_path.display().to_string());
+    }
 }

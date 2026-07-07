@@ -70,3 +70,14 @@ pub fn print_selection_cancelled() {
 pub fn format_changed_to(path: &str) -> String {
     messaging_utils::format_changed_to(path)
 }
+
+/// 打印 .index 文件缺失警告
+pub fn print_missing_index_warning(dir_path: &str) {
+    println!(
+        "{}",
+        messaging_utils::format_by_mode(
+            || messaging_utils::format_moe_missing_index(dir_path),
+            || messaging_utils::format_std_missing_index(dir_path),
+        )
+    );
+}

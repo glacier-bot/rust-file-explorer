@@ -1,8 +1,20 @@
 use crate::managers::tag::TagManager;
+use crate::messaging;
 use colored::*;
 use regex::Regex;
 use std::env;
 use std::path::Path;
+
+#[inline]
+fn check_index_file(file_path: &str) {
+    let path = Path::new(file_path);
+    if path.is_dir() {
+        let index_path = path.join(".index");
+        if !index_path.exists() {
+            messaging::print_missing_index_warning(file_path);
+        }
+    }
+}
 
 #[inline]
 fn format_tag_list(tag_manager: &TagManager) -> String {
@@ -93,6 +105,7 @@ pub fn cmd_tag(
                 return Err("Usage: tag add <file> <tag1> [tag2...]".into());
             }
             let file_path = args[1];
+            check_index_file(file_path);
             let tags = &args[2..];
             tag_manager.add_tags(file_path, tags)?;
             Ok((
@@ -110,6 +123,7 @@ pub fn cmd_tag(
                 return Err("Usage: tag remove <file> <tag1> [tag2...]".into());
             }
             let file_path = args[1];
+            check_index_file(file_path);
             let tags = &args[2..];
             tag_manager.remove_tags(file_path, tags)?;
             Ok((
@@ -127,6 +141,7 @@ pub fn cmd_tag(
                 return Err("Usage: tag clear <file>".into());
             }
             let file_path = args[1];
+            check_index_file(file_path);
             tag_manager.remove_all_tags(file_path)?;
             Ok((
                 format!(
@@ -142,6 +157,7 @@ pub fn cmd_tag(
                 return Err("Usage: tag get <file>".into());
             }
             let file_path = args[1];
+            check_index_file(file_path);
             let tags = tag_manager.get_tags(file_path);
             if tags.is_empty() {
                 Ok((
