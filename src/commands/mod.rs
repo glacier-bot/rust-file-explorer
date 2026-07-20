@@ -20,6 +20,7 @@ pub mod mv;
 pub mod open;
 pub mod pwd;
 pub mod render;
+pub mod shell;
 pub mod tag;
 pub mod welcome;
 

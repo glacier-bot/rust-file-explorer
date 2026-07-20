@@ -75,30 +75,7 @@ pub fn print_error_msg(msg: &str) {
     }
 }
 
-/// 格式化命令未找到消息
-pub fn format_cmd_not_found(cmd: &str, is_cli: bool) -> String {
-    let help_hint = if is_cli {
-        "Type 'rfe help' for available commands"
-    } else {
-        "Type 'help' for available commands"
-    };
 
-    if crate::utils::moe::is_moe() {
-        format!(
-            "{} Command not found: {}. {}~ 💕",
-            "😢".truecolor(255, 105, 180),
-            cmd.truecolor(255, 182, 193),
-            help_hint
-        )
-    } else {
-        format!(
-            "{} Command not found: {}. {}.",
-            "❌".red(),
-            cmd.cyan(),
-            help_hint
-        )
-    }
-}
 
 /// 格式化退出消息（moe 模式）
 pub fn format_moe_exit() -> String {

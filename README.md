@@ -28,6 +28,7 @@
   - [命令链（`->`）](#命令链-)
   - [占位符与 POP 展开（`{}` / `{}.pop`）](#占位符与-pop-展开----pop)
   - [标签管理（`tag`）](#标签管理-tag)
+  - [Shell 集成](#shell-集成)
 - [目录历史（`cd -b`）](#目录历史-cd--b)
 - [智能命令补全](#智能命令补全)
 - [萌系模式（`-moe`）](#萌系模式--moe)
@@ -71,6 +72,7 @@
 | **POP 展开（`{}.pop`）**     | 在路径上向上回退 N 级目录                            | `cpf src/main.rs -> cd {}.pop` 跳到项目根 |
 | **标签管理（`tag`）**        | 为文件打多标签，支持正则检索与批量筛选               | `tag find "rust\|work"` 跨目录检索        |
 | **标签目录约定（`.index`）** | 借助 `.index` 文件让目录参与标签体系，实现按标签跳转 | `cd -idx work` 跳转到标签为 work 的目录   |
+| **Shell 集成**               | 未识别命令自动转发系统 shell，目录变更自动同步       | `dir | findstr .rs -> echo Got: {}`       |
 | **智能命令补全**             | 命令名、参数、子命令自动补全，两种模式配色区分明显   | 输入 `ls -` 按 `Tab` 查看所有参数选项     |
 | **双运行模式**               | 交互式 REPL（补全 / 历史 / ESC 清空）与单次命令执行  | 连续操作用 REPL，脚本调用用单次           |
 
@@ -335,6 +337,36 @@ tag backup / tag restore              # 手动备份 / 恢复
 - 正则检索：`tag find` 支持完整正则语法，可多条件组合
 - 自动备份：每次标签修改自动生成 `.bak`，防止误操作丢失数据
 - 持久化存储：与别名共用配置目录
+
+---
+
+### Shell 集成
+
+rfe 能够**无缝桥接系统 shell 能力**：凡未被识别为 rfe 内置命令的输入，均自动转发到系统 shell（Windows 为 PowerShell / cmd，Linux / macOS 为 `sh`）执行。更重要的是，**shell 中的目录变更会自动同步到 rfe 主进程**。
+
+```bash
+# 直接运行系统命令
+dir
+Get-ChildItem
+ls -la
+
+# shell 管道与命令链可混用
+dir | findstr .rs -> echo Found: {}
+
+# shell 中的 cd 会自动同步到 rfe
+cd src; pwd       # 进入 src，rfe 工作目录同步变更
+pushd ..; pwd     # pushd / popd 同样支持
+popd
+```
+
+**关键特性**
+
+- **零配置自动转发**：无需前缀，未知命令直接交给 shell
+- **目录双向同步**：`cd` / `chdir` / `pushd` / `popd` 等目录操作结果自动同步到 rfe
+- **完整管道支持**：shell 管道 `|` 与 rfe 命令链 `->` 可混合使用
+- **跨平台适配**：Windows PowerShell / cmd 与 Unix shell 自动识别
+
+> **PowerShell 提示**：PowerShell 的 `echo` 会将空格分隔的参数逐行输出，这是 PowerShell 本身的特性，不是 rfe 的问题。如需保持单行输出，请使用引号包裹：`echo "Got: {}"`。
 
 ---
 

@@ -197,6 +197,30 @@ pub fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
         ));
 
         output.push_str(&format!(
+            "{}\n\n",
+            "🐚💖 Shell Integration~:".truecolor(255, 105, 180).bold()
+        ));
+        output.push_str(&format!(
+            "  Any unrecognized command is automatically passed to the system shell 💕\n"
+        ));
+        output.push_str(&format!(
+            "  Example: {} echo Hello World  =>  Execute shell command ✨\n",
+            "echo Hello World".truecolor(255, 182, 193)
+        ));
+        output.push_str(&format!(
+            "  Example: {}             =>  List files with ls command 💖\n",
+            "dir".truecolor(255, 182, 193)
+        ));
+        output.push_str(&format!(
+            "  Example: {}     =>  Change directory (synced with rfe) 💫\n",
+            "cd <path>".truecolor(255, 182, 193)
+        ));
+        output.push_str(&format!(
+            "  Shell command output can be used with command chaining {} ✨\n\n",
+            "->".truecolor(255, 160, 122).bold()
+        ));
+
+        output.push_str(&format!(
             "{}\n",
             "⌨️💖 Keyboard Shortcuts~:".truecolor(255, 160, 122).bold()
         ));
@@ -496,6 +520,27 @@ pub fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
         output.push_str(&format!(
             "  {}            Manage path aliases\n\n",
             "alias".cyan().bold()
+        ));
+
+        output.push_str(&format!("{}\n\n", "🐚 Shell Integration:".bright_green().bold()));
+        output.push_str(&format!(
+            "  Any unrecognized command is automatically passed to the system shell\n"
+        ));
+        output.push_str(&format!(
+            "  Example: {} echo Hello World  =>  Execute shell command\n",
+            "echo Hello World".cyan()
+        ));
+        output.push_str(&format!(
+            "  Example: {}             =>  List files with ls command\n",
+            "dir".cyan()
+        ));
+        output.push_str(&format!(
+            "  Example: {}     =>  Change directory (synced with rfe)\n",
+            "cd <path>".cyan()
+        ));
+        output.push_str(&format!(
+            "  Shell command output can be used with command chaining {}\n\n",
+            "->".yellow().bold()
         ));
 
         output.push_str(&format!(

@@ -37,22 +37,41 @@ pub fn execute_command(
     current_previous_dir: &mut Option<String>,
 ) -> Result<CommandResult, Box<dyn std::error::Error>> {
     let input = input.replace("\n", " ");
-    let command_segments: Vec<&str> = input.split("->").map(|s| s.trim()).collect();
+    
+    let mut segments = Vec::new();
+    let mut last = 0;
+    let chars: Vec<char> = input.chars().collect();
+    
+    while last < chars.len() {
+        let mut found = false;
+        for i in last..chars.len() {
+            if i + 1 < chars.len() && chars[i] == '-' && chars[i + 1] == '>' {
+                let continue_on_error = i + 2 < chars.len() && chars[i + 2] == '!';
+                let segment_end = if continue_on_error { i + 3 } else { i + 2 };
+                let segment: String = chars[last..i].iter().collect();
+                let segment = segment.trim().to_string();
+                if !segment.is_empty() {
+                    segments.push((segment, continue_on_error));
+                }
+                last = segment_end;
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            let segment: String = chars[last..].iter().collect();
+            let segment = segment.trim().to_string();
+            if !segment.is_empty() {
+                segments.push((segment, false));
+            }
+            break;
+        }
+    }
 
     let mut previous_raw_data = String::new();
     let mut result = CommandResult::Normal(false);
 
-    for segment in command_segments.iter() {
-        if segment.is_empty() {
-            continue;
-        }
-
-        let continue_on_error = segment.ends_with('!');
-        let cmd = if continue_on_error {
-            &segment[..segment.len() - 1]
-        } else {
-            segment
-        };
+    for (cmd, continue_on_error) in segments {
 
         let mut cmd = cmd.to_string();
         if cmd.contains("{}") {

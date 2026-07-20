@@ -42,6 +42,13 @@ pub fn execute_single_command(
 
     let cmd = parts[0].to_lowercase();
 
+    if cmd == "rfe" {
+        let error_msg = crate::messaging::format_error(
+            "Already running in rfe. Use 'exit' to quit REPL mode."
+        );
+        return Ok((CommandResult::Normal(false), error_msg, String::new(), None));
+    }
+
     match cmd.as_str() {
         "pwd" => {
             let (display, raw) = crate::commands::pwd::cmd_pwd()?;
@@ -84,116 +91,133 @@ pub fn execute_single_command(
             Ok((CommandResult::Normal(false), display, raw, None))
         }
         "cd" => {
-            let mut is_idx = false;
-            let mut idx_tag: Option<String> = None;
-            let mut path: Option<String> = None;
-            let mut selection: Option<usize> = None;
-
-            let mut i = 1;
-            while i < parts.len() {
-                match parts[i].as_str() {
-                    "-idx" => {
-                        is_idx = true;
-                        if i + 1 < parts.len() {
-                            idx_tag = Some(parts[i + 1].clone());
-                            i += 1;
-                        }
+            let has_shell_ops = input.contains('&') 
+                || input.contains('|') 
+                || input.contains(';')
+                || input.contains('>')
+                || input.contains('<')
+                || input.contains("&&")
+                || input.contains("||");
+            
+            if has_shell_ops {
+                match crate::commands::shell::cmd_shell(input) {
+                    Ok((display, raw, new_prev_dir)) => {
+                        Ok((CommandResult::Normal(false), display, raw, new_prev_dir))
                     }
-                    "-sel" => {
-                        if i + 1 < parts.len() {
-                            if let Ok(n) = parts[i + 1].parse::<usize>() {
-                                selection = Some(n);
-                            }
-                            i += 1;
-                        }
-                    }
-                    "-r" => {
-                        if i + 1 < parts.len() {
-                            let target_path = resolve_line_path(&parts[i + 1], last_ls_items)?;
-                            let target_path = std::path::PathBuf::from(&target_path);
-
-                            if !target_path.exists() {
-                                return Err(format!(
-                                    "Path does not exist: {}",
-                                    target_path.display()
-                                )
-                                .into());
-                            }
-                            if !target_path.is_dir() {
-                                return Err(format!(
-                                    "'{}' is not a directory",
-                                    target_path.display()
-                                )
-                                .into());
-                            }
-
-                            let current_dir = std::env::current_dir()?;
-                            std::env::set_current_dir(&target_path)?;
-                            let new_prev_dir = if target_path != current_dir {
-                                Some(current_dir.display().to_string())
-                            } else {
-                                None
-                            };
-                            let display = format!(
-                                "{} {}",
-                                "Changed to:".green(),
-                                target_path.display().to_string().cyan()
-                            );
-                            return Ok((
-                                CommandResult::Normal(false),
-                                display,
-                                target_path.display().to_string(),
-                                new_prev_dir,
-                            ));
-                        } else {
-                            return Err("Usage: cd -r <line_number>[/sub_path]".into());
-                        }
-                    }
-                    p => path = Some(alias_manager.lock().unwrap().resolve_path(p)),
-                }
-                i += 1;
-            }
-
-            if is_idx {
-                match crate::commands::cd::cmd_cd(
-                    None,
-                    previous_dir,
-                    true,
-                    idx_tag.as_deref(),
-                    Some(&tag_manager.lock().unwrap()),
-                    selection,
-                )? {
-                    crate::commands::cd::CdResult::Success(display, raw, new_prev) => {
-                        Ok((CommandResult::Normal(false), display, raw, new_prev))
-                    }
-                    crate::commands::cd::CdResult::NeedSelection(items) => Ok((
-                        CommandResult::NeedCdSelection(items),
-                        String::new(),
-                        String::new(),
-                        None,
-                    )),
+                    Err(e) => Err(e),
                 }
             } else {
-                let path = if path.is_some() {
-                    path
-                } else if !input_data.is_empty() {
-                    Some(input_data.to_string())
-                } else {
-                    None
-                };
-                match crate::commands::cd::cmd_cd(
-                    path.as_deref(),
-                    previous_dir,
-                    false,
-                    None,
-                    None,
-                    None,
-                )? {
-                    crate::commands::cd::CdResult::Success(display, raw, new_prev) => {
-                        Ok((CommandResult::Normal(false), display, raw, new_prev))
+                let mut is_idx = false;
+                let mut idx_tag: Option<String> = None;
+                let mut path: Option<String> = None;
+                let mut selection: Option<usize> = None;
+
+                let mut i = 1;
+                while i < parts.len() {
+                    match parts[i].as_str() {
+                        "-idx" => {
+                            is_idx = true;
+                            if i + 1 < parts.len() {
+                                idx_tag = Some(parts[i + 1].clone());
+                                i += 1;
+                            }
+                        }
+                        "-sel" => {
+                            if i + 1 < parts.len() {
+                                if let Ok(n) = parts[i + 1].parse::<usize>() {
+                                    selection = Some(n);
+                                }
+                                i += 1;
+                            }
+                        }
+                        "-r" => {
+                            if i + 1 < parts.len() {
+                                let target_path = resolve_line_path(&parts[i + 1], last_ls_items)?;
+                                let target_path = std::path::PathBuf::from(&target_path);
+
+                                if !target_path.exists() {
+                                    return Err(format!(
+                                        "Path does not exist: {}",
+                                        target_path.display()
+                                    )
+                                    .into());
+                                }
+                                if !target_path.is_dir() {
+                                    return Err(format!(
+                                        "'{}' is not a directory",
+                                        target_path.display()
+                                    )
+                                    .into());
+                                }
+
+                                let current_dir = std::env::current_dir()?;
+                                std::env::set_current_dir(&target_path)?;
+                                let new_prev_dir = if target_path != current_dir {
+                                    Some(current_dir.display().to_string())
+                                } else {
+                                    None
+                                };
+                                let display = format!(
+                                    "{} {}",
+                                    "Changed to:".green(),
+                                    target_path.display().to_string().cyan()
+                                );
+                                return Ok((
+                                    CommandResult::Normal(false),
+                                    display,
+                                    target_path.display().to_string(),
+                                    new_prev_dir,
+                                ));
+                            } else {
+                                return Err("Usage: cd -r <line_number>[/sub_path]".into());
+                            }
+                        }
+                        p => path = Some(alias_manager.lock().unwrap().resolve_path(p)),
                     }
-                    crate::commands::cd::CdResult::NeedSelection(_) => {
-                        Err("Unexpected error".into())
+                    i += 1;
+                }
+
+                if is_idx {
+                    match crate::commands::cd::cmd_cd(
+                        None,
+                        previous_dir,
+                        true,
+                        idx_tag.as_deref(),
+                        Some(&tag_manager.lock().unwrap()),
+                        selection,
+                    )? {
+                        crate::commands::cd::CdResult::Success(display, raw, new_prev) => {
+                            Ok((CommandResult::Normal(false), display, raw, new_prev))
+                        }
+                        crate::commands::cd::CdResult::NeedSelection(items) => Ok((
+                            CommandResult::NeedCdSelection(items),
+                            String::new(),
+                            String::new(),
+                            None,
+                        )),
+                    }
+                } else {
+                    let path = if path.is_some() {
+                        path
+                    } else if !input_data.is_empty() {
+                        Some(input_data.to_string())
+                    } else {
+                        None
+                    };
+                    match crate::commands::cd::cmd_cd(
+                        path.as_deref(),
+                        previous_dir,
+                        false,
+                        None,
+                        None,
+                        None,
+                    )? {
+                        crate::commands::cd::CdResult::Success(display, raw, new_prev) => {
+                            Ok((CommandResult::Normal(false), display, raw, new_prev))
+                        }
+                        crate::commands::cd::CdResult::NeedSelection(_) => {
+                            Err("Unexpected error".into())
+                        }
                     }
                 }
             }
@@ -421,8 +445,15 @@ pub fn execute_single_command(
             Ok((CommandResult::Normal(false), display, raw, None))
         }
         _ => {
-            let display = crate::messaging::format_command_not_found_repl(&cmd);
-            Ok((CommandResult::Normal(false), display, String::new(), None))
+            match crate::commands::shell::cmd_shell(input) {
+                Ok((display, raw, new_prev_dir)) => {
+                    Ok((CommandResult::Normal(false), display, raw, new_prev_dir))
+                }
+                Err(e) => {
+                    let display = crate::messaging::format_error(&e.to_string());
+                    Ok((CommandResult::Normal(false), display, String::new(), None))
+                }
+            }
         }
     }
 }

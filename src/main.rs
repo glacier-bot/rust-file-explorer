@@ -150,8 +150,11 @@ fn run_direct_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error
             commands::change::cmd_change(&change_args)
         }
         _ => {
-            let display = messaging::format_command_not_found_cli(cmd);
-            Ok((display, String::new()))
+            let input = args[arg_offset..].join(" ");
+            match commands::shell::cmd_shell(&input) {
+                Ok((display, raw, _prev_dir)) => Ok((display, raw)),
+                Err(e) => Err(e),
+            }
         }
     };
 

@@ -35,15 +35,7 @@ pub fn format_exit_message() -> String {
     )
 }
 
-/// 格式化命令未找到消息（REPL 模式）
-pub fn format_command_not_found_repl(cmd: &str) -> String {
-    messaging_utils::format_cmd_not_found(cmd, false)
-}
 
-/// 格式化命令未找到消息（CLI 模式）
-pub fn format_command_not_found_cli(cmd: &str) -> String {
-    messaging_utils::format_cmd_not_found(cmd, true)
-}
 
 /// 打印路径边界警告
 pub fn print_path_boundary_warning(actual_pops: usize, previous_data: &str) {
