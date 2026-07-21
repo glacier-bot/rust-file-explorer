@@ -174,8 +174,8 @@ pub fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
                             println!("{}", output);
                             pending_open_selection = Some((items, tag));
                         }
-                        Err(e) => {
-                            messaging::print_error(&e.to_string());
+                        Err(_) => {
+                            // 错误已在 pipeline 中打印
                         }
                     }
                 }

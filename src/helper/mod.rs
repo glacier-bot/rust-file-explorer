@@ -306,7 +306,7 @@ impl Validator for RfeHelper {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::helper::quoting::{needs_quoting, quote_replacement};
+    use crate::helper::quoting::needs_quoting;
     use rustyline::completion::Candidate;
     use rustyline::history::MemHistory;
 
@@ -370,6 +370,74 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// 测试引号内补全文件时自动补全结尾引号
+    #[test]
+    fn test_apply_quote_policy_in_quote_file() {
+        use crate::helper::completion_helpers::apply_quote_policy;
+        use rustyline::completion::Pair;
+
+        // 在引号内补全文件（不是目录，没有路径分隔符）
+        let mut candidates = vec![
+            Pair {
+                display: "file.txt".to_string(),
+                replacement: "file.txt".to_string(),
+            },
+            Pair {
+                display: "file with spaces.txt".to_string(),
+                replacement: "file with spaces.txt".to_string(),
+            },
+        ];
+
+        apply_quote_policy(&mut candidates, true, '"');
+
+        // 文件补全应该自动添加结尾引号
+        assert_eq!(candidates[0].replacement, "file.txt\"");
+        assert_eq!(candidates[1].replacement, "file with spaces.txt\"");
+    }
+
+    /// 测试引号内补全目录时不添加结尾引号（方便用户继续输入子路径）
+    #[test]
+    fn test_apply_quote_policy_in_quote_directory() {
+        use crate::helper::completion_helpers::apply_quote_policy;
+        use rustyline::completion::Pair;
+
+        // 在引号内补全目录（以路径分隔符结尾）
+        let mut candidates = vec![
+            Pair {
+                display: "dir/".to_string(),
+                replacement: "dir/".to_string(),
+            },
+            Pair {
+                display: "my dir/".to_string(),
+                replacement: "my dir/".to_string(),
+            },
+        ];
+
+        apply_quote_policy(&mut candidates, true, '"');
+
+        // 目录补全不添加结尾引号，方便用户继续输入子路径
+        assert_eq!(candidates[0].replacement, "dir/");
+        assert_eq!(candidates[1].replacement, "my dir/");
+    }
+
+    /// 测试单引号内补全文件时自动补全结尾引号
+    #[test]
+    fn test_apply_quote_policy_in_single_quote() {
+        use crate::helper::completion_helpers::apply_quote_policy;
+        use rustyline::completion::Pair;
+
+        // 在单引号内补全文件
+        let mut candidates = vec![Pair {
+            display: "file.txt".to_string(),
+            replacement: "file.txt".to_string(),
+        }];
+
+        apply_quote_policy(&mut candidates, true, '\'');
+
+        // 文件补全应该自动添加结尾单引号
+        assert_eq!(candidates[0].replacement, "file.txt'");
     }
 
     /// 测试 RfeHelper 在双引号内不额外添加引号
@@ -665,15 +733,73 @@ mod tests {
         assert!(needs_quoting("a,b"));
     }
 
-    /// 测试 quote_replacement 辅助函数
+    /// 测试 is_already_quoted 辅助函数
     #[test]
-    fn test_quote_replacement_behavior() {
-        // 基本包裹
-        assert_eq!(quote_replacement("my dir"), r#""my dir""#);
-        assert_eq!(quote_replacement("dir(1)/"), r#""dir(1)/""#);
+    fn test_is_already_quoted() {
+        use crate::helper::quoting::is_already_quoted;
+
+        // 空字符串和单个字符
+        assert!(!is_already_quoted(""));
+        assert!(!is_already_quoted("\""));
+        assert!(!is_already_quoted("'"));
+
+        // 双引号包裹
+        assert!(is_already_quoted(r#""path""#));
+        assert!(is_already_quoted(r#""my path""#));
+
+        // 单引号包裹
+        assert!(is_already_quoted("'path'"));
+        assert!(is_already_quoted("'my path'"));
+
+        // 不匹配的引号
+        assert!(!is_already_quoted(r#""path'#));
+        assert!(!is_already_quoted("'path\""));
+
+        // 只有开头引号
+        assert!(!is_already_quoted(r#""path"#));
+        assert!(!is_already_quoted("'path"));
+
+        // 只有结尾引号
+        assert!(!is_already_quoted(r#"path""#));
+        assert!(!is_already_quoted("path'"));
+
+        // 没有引号
+        assert!(!is_already_quoted("path"));
+        assert!(!is_already_quoted("my path"));
+    }
+
+    /// 测试 ensure_quoted 辅助函数
+    #[test]
+    fn test_ensure_quoted() {
+        use crate::helper::quoting::ensure_quoted;
 
         // 已被双引号包裹则保持不变
-        assert_eq!(quote_replacement(r#""my dir""#), r#""my dir""#);
+        assert_eq!(ensure_quoted(r#""my path""#), r#""my path""#);
+
+        // 已被单引号包裹则保持不变
+        assert_eq!(ensure_quoted("'my path'"), "'my path'");
+
+        // 包含空格但没有引号 - 添加双引号
+        assert_eq!(ensure_quoted("my path"), r#""my path""#);
+        assert_eq!(ensure_quoted("Program Files"), r#""Program Files""#);
+
+        // 包含括号但没有引号 - 添加双引号
+        assert_eq!(ensure_quoted("dir(1)"), r#""dir(1)""#);
+        assert_eq!(ensure_quoted("Program Files (x86)"), r#""Program Files (x86)""#);
+
+        // 包含其他特殊字符但没有引号 - 添加双引号
+        assert_eq!(ensure_quoted("a&b"), r#""a&b""#);
+        assert_eq!(ensure_quoted("file;name"), r#""file;name""#);
+
+        // 不需要引号的路径 - 保持原样
+        assert_eq!(ensure_quoted("simple"), "simple");
+        assert_eq!(ensure_quoted("path/to/file.txt"), "path/to/file.txt");
+        assert_eq!(ensure_quoted("C:\\Users\\q\\Desktop"), "C:\\Users\\q\\Desktop");
+        assert_eq!(ensure_quoted("中文路径"), "中文路径");
+
+        // 保留尾部斜杠
+        assert_eq!(ensure_quoted("my dir/"), r#""my dir/""#);
+        assert_eq!(ensure_quoted("dir(1)/"), r#""dir(1)/""#);
     }
 
     /// 测试 @alias 子路径补全在含特殊字符路径下统一加引号

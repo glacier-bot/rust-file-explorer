@@ -107,11 +107,12 @@ pub fn execute_command(
                 }
             }
             Err(e) => {
-                let error_msg = messaging::format_error(&e.to_string());
+                let error_str = e.to_string();
+                let error_msg = messaging::format_error(&error_str);
                 println!("{}", error_msg);
                 previous_raw_data = String::new();
                 if !continue_on_error {
-                    return Err(error_msg.into());
+                    return Err(error_str.into());
                 }
             }
         }

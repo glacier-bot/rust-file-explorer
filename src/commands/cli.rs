@@ -42,7 +42,7 @@ pub fn parse_ls_args(
     let mut re_insensitive = false;
     let mut show_tags = false;
     let mut recursive = false;
-    let mut path: Option<String> = None;
+    let mut path_parts: Vec<String> = Vec::new();
     let mut tag_pattern_strs: Vec<String> = Vec::new();
 
     let mut i = arg_offset + 1;
@@ -78,10 +78,16 @@ pub fn parse_ls_args(
                     );
                 }
             }
-            p => path = Some(alias_manager.resolve_path(p)),
+            p => path_parts.push(alias_manager.resolve_path(p)),
         }
         i += 1;
     }
+
+    let path = if path_parts.is_empty() {
+        None
+    } else {
+        Some(path_parts.join(" "))
+    };
 
     let mut tag_patterns = Vec::new();
     for pattern_str in tag_pattern_strs {
@@ -111,7 +117,7 @@ pub fn parse_cd_args(
 ) -> Result<CdArgs, Box<dyn std::error::Error>> {
     let mut is_idx = false;
     let mut idx_tag: Option<String> = None;
-    let mut path: Option<String> = None;
+    let mut path_parts: Vec<String> = Vec::new();
 
     let mut i = arg_offset + 1;
     while i < args.len() {
@@ -123,10 +129,16 @@ pub fn parse_cd_args(
                     i += 1;
                 }
             }
-            p => path = Some(alias_manager.resolve_path(p)),
+            p => path_parts.push(alias_manager.resolve_path(p)),
         }
         i += 1;
     }
+
+    let path = if path_parts.is_empty() {
+        None
+    } else {
+        Some(path_parts.join(" "))
+    };
 
     Ok(CdArgs {
         path,
@@ -141,8 +153,7 @@ pub fn parse_mv_args(
     arg_offset: usize,
     alias_manager: &AliasManager,
 ) -> Result<MvArgs, Box<dyn std::error::Error>> {
-    let mut source: Option<String> = None;
-    let mut destination: Option<String> = None;
+    let mut path_parts: Vec<String> = Vec::new();
     let mut copy = false;
 
     let mut i = arg_offset + 1;
@@ -156,20 +167,18 @@ pub fn parse_mv_args(
                 return Err("-r parameter is only available in REPL mode (interactive mode)".into());
             }
             part => {
-                let resolved = alias_manager.resolve_path(part);
-                if source.is_none() {
-                    source = Some(resolved);
-                } else if destination.is_none() {
-                    destination = Some(resolved);
-                }
+                path_parts.push(alias_manager.resolve_path(part));
                 i += 1;
             }
         }
     }
 
-    let source = source.ok_or("Usage: rfe mv <source_path> <destination_path> [--cp]")?;
-    let destination =
-        destination.ok_or("Usage: rfe mv <source_path> <destination_path> [--cp]")?;
+    if path_parts.len() < 2 {
+        return Err("Usage: rfe mv <source_path> <destination_path> [--cp]".into());
+    }
+
+    let destination = path_parts.pop().unwrap();
+    let source = path_parts.join(" ");
 
     Ok(MvArgs {
         source,
@@ -184,11 +193,16 @@ pub fn parse_cpf_arg(
     arg_offset: usize,
     alias_manager: &AliasManager,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let path = args
-        .get(arg_offset + 1)
-        .map(|s| s.as_str())
-        .ok_or("Usage: rfe cpf <file>")?;
-    Ok(alias_manager.resolve_path(path))
+    let path_parts: Vec<String> = args[arg_offset + 1..]
+        .iter()
+        .map(|s| alias_manager.resolve_path(s))
+        .collect();
+    
+    if path_parts.is_empty() {
+        return Err("Usage: rfe cpf <file>".into());
+    }
+    
+    Ok(path_parts.join(" "))
 }
 
 /// 解析 open 命令参数
@@ -197,11 +211,16 @@ pub fn parse_open_arg(
     arg_offset: usize,
     alias_manager: &AliasManager,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let path = args
-        .get(arg_offset + 1)
-        .map(|s| s.as_str())
-        .ok_or("Usage: rfe open <file>")?;
-    Ok(alias_manager.resolve_path(path))
+    let path_parts: Vec<String> = args[arg_offset + 1..]
+        .iter()
+        .map(|s| alias_manager.resolve_path(s))
+        .collect();
+    
+    if path_parts.is_empty() {
+        return Err("Usage: rfe open <file>".into());
+    }
+    
+    Ok(path_parts.join(" "))
 }
 
 /// 解析 alias 命令参数（直接返回切片）

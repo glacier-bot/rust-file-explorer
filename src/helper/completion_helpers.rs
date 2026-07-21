@@ -9,7 +9,12 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use super::quoting::{needs_quoting, quote_replacement};
+use super::quoting::ensure_quoted;
+
+/// 检查补全结果是否是目录（以路径分隔符结尾）
+fn is_directory_completion(replacement: &str) -> bool {
+    replacement.ends_with('/') || replacement.ends_with('\\')
+}
 
 /// 检查当前输入是否处于引号内，并返回引号类型
 pub fn check_in_quote(line: &str, pos: usize) -> (bool, char) {
@@ -78,28 +83,45 @@ pub fn complete_tag_command(
 /// 对补全结果应用统一的引号策略
 pub fn apply_quote_policy(candidates: &mut Vec<Pair>, in_quote: bool, quote_char: char) {
     if in_quote {
-        // 在引号内：不需要额外加引号，处理单引号内双引号的情况
-        if quote_char == '\'' {
-            for candidate in candidates {
-                if candidate.replacement.starts_with('"') {
-                    candidate.replacement = candidate.replacement.trim_start_matches('"').to_string();
-                }
-                if candidate.replacement.ends_with('"') {
-                    candidate.replacement = candidate.replacement.trim_end_matches('"').to_string();
-                }
-            }
-        }
-    } else {
-        // 不在引号内：统一引号策略
+        // 在引号内：移除补全结果中的引号（由用户输入的引号包裹）
         for candidate in candidates {
             let repl = &candidate.replacement;
-            if repl.starts_with('"') && !repl.ends_with('"') {
-                // FilenameCompleter 已加开头引号但缺结尾引号，补上
-                candidate.replacement = format!("{}\"", repl);
-            } else if !repl.starts_with('"') && needs_quoting(repl) {
-                // 含特殊字符但未加引号，统一包裹
-                candidate.replacement = quote_replacement(repl);
+            let mut base_repl = if repl.starts_with('"') {
+                repl[1..repl.len() - if repl.ends_with('"') { 1 } else { 0 }].to_string()
+            } else if repl.starts_with('\'') {
+                repl[1..repl.len() - if repl.ends_with('\'') { 1 } else { 0 }].to_string()
+            } else {
+                repl.clone()
+            };
+            
+            // 确保没有多余的引号
+            if (quote_char == '"' && base_repl.contains('"')) || 
+               (quote_char == '\'' && base_repl.contains('\'')) {
+                // 如果补全结果中包含与当前引号相同的字符，需要转义或清理
+                // 这里简单移除补全结果中的引号
+                base_repl = base_repl.replace(quote_char, "");
             }
+            
+            // 如果补全的不是目录（没有尾部路径分隔符），自动添加结尾引号
+            // 目录补全不添加结尾引号，方便用户继续输入子路径
+            if !is_directory_completion(&base_repl) {
+                base_repl.push(quote_char);
+            }
+            
+            candidate.replacement = base_repl;
+        }
+    } else {
+        // 不在引号内：统一使用 ensure_quoted 处理引号
+        for candidate in candidates {
+            let repl = &candidate.replacement;
+            // 处理 FilenameCompleter 可能只加了开头引号的情况
+            let trimmed = if repl.starts_with('"') && !repl.ends_with('"') {
+                // 移除开头引号，让 ensure_quoted 统一处理
+                repl[1..].to_string()
+            } else {
+                repl.clone()
+            };
+            candidate.replacement = ensure_quoted(&trimmed);
         }
     }
 }
@@ -179,16 +201,10 @@ pub fn complete_line_number_path(
                                         replacement.clone()
                                     };
 
-                                    // 统一引号策略
-                                    let final_replacement = if needs_quoting(&replacement_with_sep) {
-                                        quote_replacement(&replacement_with_sep)
-                                    } else {
-                                        replacement_with_sep
-                                    };
-
+                                    // 统一使用 ensure_quoted 处理引号
                                     candidates.push(Pair {
                                         display: name.to_string(),
-                                        replacement: final_replacement,
+                                        replacement: ensure_quoted(&replacement_with_sep),
                                     });
                                 }
                             }
@@ -305,16 +321,10 @@ pub fn complete_alias_path(
                             replacement.clone()
                         };
 
-                        // 统一引号策略：路径含空格/英文括号等特殊字符时用双引号包裹
-                        let final_replacement = if needs_quoting(&replacement_with_sep) {
-                            quote_replacement(&replacement_with_sep)
-                        } else {
-                            replacement_with_sep
-                        };
-
+                        // 统一使用 ensure_quoted 处理引号
                         candidates.push(Pair {
                             display: name.clone(),
-                            replacement: final_replacement,
+                            replacement: ensure_quoted(&replacement_with_sep),
                         });
                     }
 
@@ -383,16 +393,10 @@ pub fn complete_alias_path(
                                     format!("@{}/{}", alias, name)
                                 };
 
-                                // 统一引号策略：路径含空格/英文括号等特殊字符时用双引号包裹
-                                let final_replacement = if needs_quoting(&replacement) {
-                                    quote_replacement(&replacement)
-                                } else {
-                                    replacement
-                                };
-
+                                // 统一使用 ensure_quoted 处理引号
                                 sub_candidates.push(Pair {
                                     display: name,
-                                    replacement: final_replacement,
+                                    replacement: ensure_quoted(&replacement),
                                 });
                             }
                             candidates.extend(sub_candidates);

@@ -12,12 +12,29 @@ pub fn needs_quoting(path: &str) -> bool {
     ))
 }
 
-/// 给补全候选添加双引号包裹（保留尾部斜杠）
-/// 例如：`my dir/` -> `"my dir/"`、`my (dir)` -> `"my (dir)"`
-/// 如果已经被双引号包裹，则保持不变
-pub fn quote_replacement(replacement: &str) -> String {
-    if replacement.starts_with('"') && replacement.ends_with('"') && replacement.len() >= 2 {
-        return replacement.to_string();
+/// 检查路径是否已经被引号包裹（双引号或单引号）
+pub fn is_already_quoted(path: &str) -> bool {
+    if path.len() < 2 {
+        return false;
     }
-    format!("\"{}\"", replacement)
+    let first = path.chars().next().unwrap();
+    let last = path.chars().last().unwrap();
+    (first == '"' && last == '"') || (first == '\'' && last == '\'')
 }
+
+/// 确保路径被双引号包裹（用于运行时执行）
+/// 如果路径已经被引号包裹（双引号或单引号），则保持不变
+/// 如果路径包含需要引号的特殊字符但没有引号，则添加双引号
+/// 如果路径不需要引号，则保持原样
+pub fn ensure_quoted(path: &str) -> String {
+    if is_already_quoted(path) {
+        return path.to_string();
+    }
+    if needs_quoting(path) {
+        format!("\"{}\"", path)
+    } else {
+        path.to_string()
+    }
+}
+
+

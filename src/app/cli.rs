@@ -2,6 +2,7 @@
 //! 负责解析单条命令并调用对应的命令处理函数
 
 use crate::app::pipeline::CommandResult;
+
 use crate::managers::{alias::AliasManager, tag::TagManager};
 use crate::models::FileInfo;
 use crate::resolver::resolve_line_path;
@@ -59,33 +60,33 @@ pub fn execute_single_command(
             Ok((CommandResult::Normal(false), display, raw, None))
         }
         "cpf" => {
-            let mut path: Option<String> = None;
+            let mut path_parts: Vec<String> = Vec::new();
             let mut i = 1;
             while i < parts.len() {
                 if parts[i] == "-r" {
                     if i + 1 >= parts.len() {
                         return Err("Usage: cpf -r <line_number>[/path]".into());
                     }
-                    let resolved = resolve_line_path(&parts[i + 1], last_ls_items)?;
-                    path = Some(resolved);
-                    i += 2;
-                } else {
-                    if path.is_none() {
-                        path = Some(alias_manager.lock().unwrap().resolve_path(&parts[i]));
-                    }
-                    i += 1;
-                }
+                     let resolved = resolve_line_path(&parts[i + 1], last_ls_items)?;
+                     path_parts.push(resolved);
+                     i += 2;
+                 } else {
+                     let resolved = alias_manager.lock().unwrap().resolve_path(&parts[i]);
+                     path_parts.push(resolved);
+                     i += 1;
+                 }
             }
 
-            let path = path
-                .or_else(|| {
-                    if !input_data.is_empty() {
-                        Some(input_data.to_string())
-                    } else {
-                        None
-                    }
-                })
-                .ok_or("Usage: cpf <file> or cpf -r <line_number>[/path]")?;
+            let path = if path_parts.is_empty() {
+                if !input_data.is_empty() {
+                    Some(input_data.to_string())
+                } else {
+                    None
+                }
+            } else {
+                Some(path_parts.join(" "))
+            }
+            .ok_or("Usage: cpf <file> or cpf -r <line_number>[/path]")?;
 
             let (display, raw) = crate::commands::clipboard::cmd_cpf(&path)?;
             Ok((CommandResult::Normal(false), display, raw, None))
@@ -109,7 +110,7 @@ pub fn execute_single_command(
             } else {
                 let mut is_idx = false;
                 let mut idx_tag: Option<String> = None;
-                let mut path: Option<String> = None;
+                let mut path_parts: Vec<String> = Vec::new();
                 let mut selection: Option<usize> = None;
 
                 let mut i = 1;
@@ -131,28 +132,28 @@ pub fn execute_single_command(
                             }
                         }
                         "-r" => {
-                            if i + 1 < parts.len() {
-                                let target_path = resolve_line_path(&parts[i + 1], last_ls_items)?;
-                                let target_path = std::path::PathBuf::from(&target_path);
+                             if i + 1 < parts.len() {
+                                 let target_path = resolve_line_path(&parts[i + 1], last_ls_items)?;
+                                 let target_path_buf = std::path::PathBuf::from(&target_path);
 
-                                if !target_path.exists() {
+                                if !target_path_buf.exists() {
                                     return Err(format!(
                                         "Path does not exist: {}",
-                                        target_path.display()
+                                        target_path
                                     )
                                     .into());
                                 }
-                                if !target_path.is_dir() {
+                                if !target_path_buf.is_dir() {
                                     return Err(format!(
                                         "'{}' is not a directory",
-                                        target_path.display()
+                                        target_path
                                     )
                                     .into());
                                 }
 
                                 let current_dir = std::env::current_dir()?;
-                                std::env::set_current_dir(&target_path)?;
-                                let new_prev_dir = if target_path != current_dir {
+                                std::env::set_current_dir(&target_path_buf)?;
+                                let new_prev_dir = if target_path_buf != current_dir {
                                     Some(current_dir.display().to_string())
                                 } else {
                                     None
@@ -160,22 +161,31 @@ pub fn execute_single_command(
                                 let display = format!(
                                     "{} {}",
                                     "Changed to:".green(),
-                                    target_path.display().to_string().cyan()
+                                    target_path.cyan()
                                 );
                                 return Ok((
                                     CommandResult::Normal(false),
                                     display,
-                                    target_path.display().to_string(),
+                                    target_path,
                                     new_prev_dir,
                                 ));
                             } else {
                                 return Err("Usage: cd -r <line_number>[/sub_path]".into());
                             }
                         }
-                        p => path = Some(alias_manager.lock().unwrap().resolve_path(p)),
+                    p => {
+                         let resolved = alias_manager.lock().unwrap().resolve_path(p);
+                         path_parts.push(resolved);
+                    }
                     }
                     i += 1;
                 }
+
+                let path = if path_parts.is_empty() {
+                    None
+                } else {
+                    Some(path_parts.join(" "))
+                };
 
                 if is_idx {
                     match crate::commands::cd::cmd_cd(
@@ -197,13 +207,13 @@ pub fn execute_single_command(
                         )),
                     }
                 } else {
-                    let path = if path.is_some() {
-                        path
-                    } else if !input_data.is_empty() {
-                        Some(input_data.to_string())
-                    } else {
-                        None
-                    };
+                 let path = if path.is_some() {
+                         path
+                     } else if !input_data.is_empty() {
+                         Some(input_data.to_string())
+                     } else {
+                         None
+                     };
                     match crate::commands::cd::cmd_cd(
                         path.as_deref(),
                         previous_dir,
@@ -229,7 +239,7 @@ pub fn execute_single_command(
             let mut re_insensitive = false;
             let mut show_tags = false;
             let mut recursive = false;
-            let mut path: Option<String> = None;
+            let mut path_parts: Vec<String> = Vec::new();
             let mut tag_pattern_strs: Vec<String> = Vec::new();
 
             let mut i = 1;
@@ -266,10 +276,19 @@ pub fn execute_single_command(
                             );
                         }
                     }
-                    p => path = Some(alias_manager.lock().unwrap().resolve_path(p)),
+                    p => {
+                        let resolved = alias_manager.lock().unwrap().resolve_path(p);
+                        path_parts.push(resolved);
+                    }
                 }
                 i += 1;
             }
+
+            let path = if path_parts.is_empty() {
+                None
+            } else {
+                Some(path_parts.join(" "))
+            };
 
             let mut tag_patterns = Vec::new();
             for pattern_str in tag_pattern_strs {
@@ -296,7 +315,7 @@ pub fn execute_single_command(
         "open" => {
             let mut is_tag = false;
             let mut tag_value: Option<String> = None;
-            let mut path: Option<String> = None;
+            let mut path_parts: Vec<String> = Vec::new();
             let mut selection: Option<usize> = None;
             let mut i = 1;
             while i < parts.len() {
@@ -316,15 +335,18 @@ pub fn execute_single_command(
                             i += 1;
                         }
                     }
-                    "-r" => {
-                        if i + 1 >= parts.len() {
-                            return Err("Usage: open -r <line_number>[/path]".into());
-                        }
-                        let resolved = resolve_line_path(&parts[i + 1], last_ls_items)?;
-                        path = Some(resolved);
-                        i += 2;
+                     "-r" => {
+                         if i + 1 >= parts.len() {
+                             return Err("Usage: open -r <line_number>[/path]".into());
+                         }
+                         let resolved = resolve_line_path(&parts[i + 1], last_ls_items)?;
+                         path_parts.push(resolved);
+                         i += 2;
+                     }
+                     p => {
+                         let resolved = alias_manager.lock().unwrap().resolve_path(p);
+                         path_parts.push(resolved);
                     }
-                    p => path = Some(alias_manager.lock().unwrap().resolve_path(p)),
                 }
                 i += 1;
             }
@@ -345,24 +367,24 @@ pub fn execute_single_command(
                         None,
                     )),
                 }
-            } else {
-                let path = path
-                    .or_else(|| {
-                        if !input_data.is_empty() {
-                            Some(input_data.to_string())
-                        } else {
-                            None
-                        }
-                    })
-                    .ok_or("Usage: open <file> or open -r <line_number>[/path] or open -tag <tag>")?;
+             } else {
+                 let path = if path_parts.is_empty() {
+                     if !input_data.is_empty() {
+                         Some(input_data.to_string())
+                     } else {
+                         None
+                     }
+                 } else {
+                     Some(path_parts.join(" "))
+                 }
+                .ok_or("Usage: open <file> or open -r <line_number>[/path] or open -tag <tag>")?;
 
                 let (display, raw) = crate::commands::open::cmd_open(&path)?;
                 Ok((CommandResult::Normal(false), display, raw, None))
             }
         }
         "mv" => {
-            let mut source: Option<String> = None;
-            let mut destination: Option<String> = None;
+            let mut path_parts: Vec<String> = Vec::new();
             let mut copy = false;
 
             let mut i = 1;
@@ -372,36 +394,31 @@ pub fn execute_single_command(
                         copy = true;
                         i += 1;
                     }
-                    "-r" => {
-                        if i + 1 >= parts.len() {
-                            return Err("Missing path after -r parameter".into());
-                        }
-                        let resolved = resolve_line_path(&parts[i + 1], last_ls_items)?;
-                        if source.is_none() {
-                            source = Some(resolved);
-                        } else if destination.is_none() {
-                            destination = Some(resolved);
-                        }
-                        i += 2;
-                    }
-                    part => {
-                        let resolved = alias_manager.lock().unwrap().resolve_path(part);
-                        if source.is_none() {
-                            source = Some(resolved);
-                        } else if destination.is_none() {
-                            destination = Some(resolved);
-                        }
-                        i += 1;
-                    }
+                     "-r" => {
+                         if i + 1 >= parts.len() {
+                             return Err("Missing path after -r parameter".into());
+                         }
+                         let resolved = resolve_line_path(&parts[i + 1], last_ls_items)?;
+                         path_parts.push(resolved);
+                         i += 2;
+                     }
+                     part => {
+                         let resolved = alias_manager.lock().unwrap().resolve_path(part);
+                         path_parts.push(resolved);
+                         i += 1;
+                     }
                 }
             }
 
-            let source = source.ok_or(
-                "Usage: mv <source_path> <destination_path> [--cp] or mv -r <source_line> <destination> or mv <source> -r <destination_line>",
-            )?;
-            let destination = destination.ok_or(
-                "Usage: mv <source_path> <destination_path> [--cp] or mv -r <source_line> <destination> or mv <source> -r <destination_line>",
-            )?;
+            if path_parts.len() < 2 {
+                return Err(
+                    "Usage: mv <source_path> <destination_path> [--cp] or mv -r <source_line> <destination> or mv <source> -r <destination_line>"
+                        .into(),
+                );
+            }
+
+            let destination = path_parts.pop().unwrap();
+            let source = path_parts.join(" ");
 
             let (display, raw) = crate::commands::mv::cmd_mv(&source, &destination, copy)?;
             Ok((CommandResult::Normal(false), display, raw, None))
