@@ -11,11 +11,6 @@ use std::time::Instant;
 
 use super::quoting::ensure_quoted;
 
-/// 检查补全结果是否是目录（以路径分隔符结尾）
-fn is_directory_completion(replacement: &str) -> bool {
-    replacement.ends_with('/') || replacement.ends_with('\\')
-}
-
 /// 检查当前输入是否处于引号内，并返回引号类型
 pub fn check_in_quote(line: &str, pos: usize) -> (bool, char) {
     let mut in_quote = false;
@@ -40,6 +35,16 @@ pub fn is_after_closing_quote(line: &str, pos: usize) -> bool {
     if pos > 0 {
         let last_char = line[..pos].chars().last().unwrap();
         last_char == '"' || last_char == '\''
+    } else {
+        false
+    }
+}
+
+/// 检查光标是否在闭合引号之前（即光标后面紧跟一个闭合引号）
+pub fn is_before_closing_quote(line: &str, pos: usize) -> bool {
+    if pos < line.len() {
+        let next_char = line[pos..].chars().next().unwrap();
+        next_char == '"' || next_char == '\''
     } else {
         false
     }
@@ -81,46 +86,41 @@ pub fn complete_tag_command(
 }
 
 /// 对补全结果应用统一的引号策略
-pub fn apply_quote_policy(candidates: &mut Vec<Pair>, in_quote: bool, quote_char: char) {
+/// 原则：引号必须只闭合1次，无论路径是否有空格都放到引号内
+pub fn apply_quote_policy(
+    candidates: &mut Vec<Pair>, 
+    in_quote: bool, 
+    quote_char: char,
+    cursor_before_closing_quote: bool,  // 新增：光标是否在闭合引号之前
+) {
     if in_quote {
-        // 在引号内：移除补全结果中的引号（由用户输入的引号包裹）
+        // 在引号内：移除补全结果中的所有引号
         for candidate in candidates {
             let repl = &candidate.replacement;
-            let mut base_repl = if repl.starts_with('"') {
-                repl[1..repl.len() - if repl.ends_with('"') { 1 } else { 0 }].to_string()
-            } else if repl.starts_with('\'') {
-                repl[1..repl.len() - if repl.ends_with('\'') { 1 } else { 0 }].to_string()
-            } else {
-                repl.clone()
-            };
             
-            // 确保没有多余的引号
-            if (quote_char == '"' && base_repl.contains('"')) || 
-               (quote_char == '\'' && base_repl.contains('\'')) {
-                // 如果补全结果中包含与当前引号相同的字符，需要转义或清理
-                // 这里简单移除补全结果中的引号
-                base_repl = base_repl.replace(quote_char, "");
-            }
+            // 移除所有开头和结尾的引号
+            let mut base_repl = repl.trim_matches(|c| c == '"' || c == '\'').to_string();
             
-            // 如果补全的不是目录（没有尾部路径分隔符），自动添加结尾引号
-            // 目录补全不添加结尾引号，方便用户继续输入子路径
-            if !is_directory_completion(&base_repl) {
+            // 移除内容中多余的引号字符
+            base_repl = base_repl.replace(quote_char, "");
+            
+            // 只有当光标不在闭合引号之前时，才添加结尾引号
+            // 如果光标已经在闭合引号之前了，用户已经输入了结尾引号，不需要再加
+            if !cursor_before_closing_quote {
                 base_repl.push(quote_char);
             }
             
             candidate.replacement = base_repl;
         }
     } else {
-        // 不在引号内：统一使用 ensure_quoted 处理引号
+        // 不在引号内：确保结果被一对引号包裹（只有开头和结尾各一个）
         for candidate in candidates {
             let repl = &candidate.replacement;
-            // 处理 FilenameCompleter 可能只加了开头引号的情况
-            let trimmed = if repl.starts_with('"') && !repl.ends_with('"') {
-                // 移除开头引号，让 ensure_quoted 统一处理
-                repl[1..].to_string()
-            } else {
-                repl.clone()
-            };
+            
+            // 移除所有引号，然后统一添加一对
+            let trimmed = repl.replace('"', "").replace('\'', "");
+            
+            // 使用 ensure_quoted 统一添加一对引号
             candidate.replacement = ensure_quoted(&trimmed);
         }
     }

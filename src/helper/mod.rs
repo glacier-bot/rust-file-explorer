@@ -19,10 +19,10 @@ pub mod highlight;
 pub mod hinter;
 pub mod quoting;
 
-use completion_helpers::{
-    apply_quote_policy, check_in_quote, complete_alias_path, complete_line_number_path,
-    complete_tag_command, is_after_closing_quote,
-};
+        use completion_helpers::{
+            apply_quote_policy, check_in_quote, complete_alias_path, complete_line_number_path,
+            complete_tag_command, is_after_closing_quote, is_before_closing_quote,
+        };
 use highlight::highlight_prompt;
 use hinter::hint;
 
@@ -220,14 +220,20 @@ impl Completer for RfeHelper {
             CompletionContext::Path | CompletionContext::Unknown => {}
         }
         
+        // 检查引号相关状态（需要先计算，后面要用）
+        let (in_quote, quote_char) = check_in_quote(line, pos);
+        let cursor_before_closing_quote = is_before_closing_quote(line, pos);
+        
         // cd -r <行号>/<子路径> 补全
-        if let Some(result) = complete_line_number_path(line, pos, &self.last_ls_items) {
-            return Ok(result);
+        if let Some((start, mut candidates)) = complete_line_number_path(line, pos, &self.last_ls_items) {
+            apply_quote_policy(&mut candidates, in_quote, quote_char, cursor_before_closing_quote);
+            return Ok((start, candidates));
         }
         
         // 路径别名补全 - 支持 @alias/path 的层级补全
-        if let Some(result) = complete_alias_path(current_word, pos, &self.alias_manager) {
-            return Ok(result);
+        if let Some((start, mut candidates)) = complete_alias_path(current_word, pos, &self.alias_manager) {
+            apply_quote_policy(&mut candidates, in_quote, quote_char, cursor_before_closing_quote);
+            return Ok((start, candidates));
         }
         
         // 标签补全：当命令是tag add/tag remove时补全标签名
@@ -272,9 +278,8 @@ impl Completer for RfeHelper {
         #[cfg(not(windows))]
         let result = self.completer.complete(line, pos, ctx)?;
 
-        let (in_quote, quote_char) = check_in_quote(line, pos);
         let mut candidates = result.1;
-        apply_quote_policy(&mut candidates, in_quote, quote_char);
+        apply_quote_policy(&mut candidates, in_quote, quote_char, cursor_before_closing_quote);
         Ok((result.0, candidates))
     }
 }
@@ -390,14 +395,14 @@ mod tests {
             },
         ];
 
-        apply_quote_policy(&mut candidates, true, '"');
+        apply_quote_policy(&mut candidates, true, '"', false);
 
         // 文件补全应该自动添加结尾引号
         assert_eq!(candidates[0].replacement, "file.txt\"");
         assert_eq!(candidates[1].replacement, "file with spaces.txt\"");
     }
 
-    /// 测试引号内补全目录时不添加结尾引号（方便用户继续输入子路径）
+    /// 测试引号内补全目录时也添加结尾引号（统一引号策略）
     #[test]
     fn test_apply_quote_policy_in_quote_directory() {
         use crate::helper::completion_helpers::apply_quote_policy;
@@ -415,11 +420,11 @@ mod tests {
             },
         ];
 
-        apply_quote_policy(&mut candidates, true, '"');
+        apply_quote_policy(&mut candidates, true, '"', false);
 
-        // 目录补全不添加结尾引号，方便用户继续输入子路径
-        assert_eq!(candidates[0].replacement, "dir/");
-        assert_eq!(candidates[1].replacement, "my dir/");
+        // 目录补全也添加结尾引号（统一引号策略）
+        assert_eq!(candidates[0].replacement, "dir/\"");
+        assert_eq!(candidates[1].replacement, "my dir/\"");
     }
 
     /// 测试单引号内补全文件时自动补全结尾引号
@@ -434,7 +439,7 @@ mod tests {
             replacement: "file.txt".to_string(),
         }];
 
-        apply_quote_policy(&mut candidates, true, '\'');
+        apply_quote_policy(&mut candidates, true, '\'', false);
 
         // 文件补全应该自动添加结尾单引号
         assert_eq!(candidates[0].replacement, "file.txt'");
@@ -483,9 +488,9 @@ mod tests {
         );
     }
 
-    /// 测试普通路径补全不添加引号
+    /// 测试普通路径补全也添加引号（统一策略）
     #[test]
-    fn test_rfe_helper_normal_path_no_quote() {
+    fn test_rfe_helper_normal_path_with_quote() {
         let helper = create_helper();
         let history = MemHistory::default();
         let ctx = Context::new(&history);
@@ -500,10 +505,10 @@ mod tests {
             let replacement = candidate.replacement();
             println!("普通路径补全结果: {}", replacement);
 
-            // 普通路径不应该有多余的引号
+            // 统一策略：所有路径都应该在引号内
             assert!(
-                !replacement.starts_with('"'),
-                "普通路径补全不应包含引号: {}",
+                replacement.starts_with('"') && replacement.ends_with('"'),
+                "普通路径补全也应包含引号: {}",
                 replacement
             );
         }
@@ -779,27 +784,96 @@ mod tests {
         // 已被单引号包裹则保持不变
         assert_eq!(ensure_quoted("'my path'"), "'my path'");
 
-        // 包含空格但没有引号 - 添加双引号
+        // 无论是否包含空格，始终添加双引号
         assert_eq!(ensure_quoted("my path"), r#""my path""#);
         assert_eq!(ensure_quoted("Program Files"), r#""Program Files""#);
+        assert_eq!(ensure_quoted("simple"), r#""simple""#);
+        assert_eq!(ensure_quoted("path/to/file.txt"), r#""path/to/file.txt""#);
+        assert_eq!(ensure_quoted("C:\\Users\\q\\Desktop"), r#""C:\Users\q\Desktop""#);
+        assert_eq!(ensure_quoted("中文路径"), r#""中文路径""#);
 
-        // 包含括号但没有引号 - 添加双引号
+        // 包含括号和其他特殊字符也添加双引号
         assert_eq!(ensure_quoted("dir(1)"), r#""dir(1)""#);
         assert_eq!(ensure_quoted("Program Files (x86)"), r#""Program Files (x86)""#);
-
-        // 包含其他特殊字符但没有引号 - 添加双引号
         assert_eq!(ensure_quoted("a&b"), r#""a&b""#);
         assert_eq!(ensure_quoted("file;name"), r#""file;name""#);
-
-        // 不需要引号的路径 - 保持原样
-        assert_eq!(ensure_quoted("simple"), "simple");
-        assert_eq!(ensure_quoted("path/to/file.txt"), "path/to/file.txt");
-        assert_eq!(ensure_quoted("C:\\Users\\q\\Desktop"), "C:\\Users\\q\\Desktop");
-        assert_eq!(ensure_quoted("中文路径"), "中文路径");
 
         // 保留尾部斜杠
         assert_eq!(ensure_quoted("my dir/"), r#""my dir/""#);
         assert_eq!(ensure_quoted("dir(1)/"), r#""dir(1)/""#);
+    }
+
+    /// 测试引号内补全不会出现多余引号
+    #[test]
+    fn test_apply_quote_policy_no_extra_quotes() {
+        use crate::helper::completion_helpers::apply_quote_policy;
+        use rustyline::completion::Pair;
+
+        // 场景1：补全结果本身已经带引号
+        let mut candidates1 = vec![Pair {
+            display: "file.txt".to_string(),
+            replacement: "\"file.txt\"".to_string(),
+        }];
+        apply_quote_policy(&mut candidates1, true, '"', false);
+        assert_eq!(candidates1[0].replacement, "file.txt\""); // 不应有开头引号，只应有结尾引号
+
+        // 场景2：补全结果只带开头引号（FilenameCompleter 的常见行为）
+        let mut candidates2 = vec![Pair {
+            display: "file with space.txt".to_string(),
+            replacement: "\"file with space.txt".to_string(),
+        }];
+        apply_quote_policy(&mut candidates2, true, '"', false);
+        assert_eq!(candidates2[0].replacement, "file with space.txt\"");
+
+        // 场景3：补全结果带单引号，但用户用的是双引号
+        let mut candidates3 = vec![Pair {
+            display: "file.txt".to_string(),
+            replacement: "'file.txt'".to_string(),
+        }];
+        apply_quote_policy(&mut candidates3, true, '"', false);
+        assert_eq!(candidates3[0].replacement, "file.txt\"");
+
+        // 场景4：单引号内补全，结果带双引号
+        let mut candidates4 = vec![Pair {
+            display: "file.txt".to_string(),
+            replacement: "\"file.txt\"".to_string(),
+        }];
+        apply_quote_policy(&mut candidates4, true, '\'', false);
+        assert_eq!(candidates4[0].replacement, "file.txt'");
+
+        // 场景5：路径中间有引号字符（虽然实际路径不应该有，但要处理）
+        let mut candidates5 = vec![Pair {
+            display: "file\"name.txt".to_string(),
+            replacement: "file\"name.txt".to_string(),
+        }];
+        apply_quote_policy(&mut candidates5, true, '"', false);
+        assert_eq!(candidates5[0].replacement, "filename.txt\""); // 中间引号应该被移除
+
+        // 场景6：目录补全，结果带引号
+        let mut candidates6 = vec![Pair {
+            display: "my dir/".to_string(),
+            replacement: "\"my dir/".to_string(),
+        }];
+        apply_quote_policy(&mut candidates6, true, '"', false);
+        assert_eq!(candidates6[0].replacement, "my dir/\""); // 斜杠后只有一个结尾引号
+
+        // 场景7：用户输入路径中间包含反斜杠（Windows 路径）
+        // 输入: cd "te sts\in，光标在n后
+        // FilenameCompleter 可能返回 "in dex.txt" 或其他带引号形式
+        let mut candidates7 = vec![Pair {
+            display: "in dex.txt".to_string(),
+            replacement: "\"in dex.txt\"".to_string(), // 补全结果自带完整引号
+        }];
+        apply_quote_policy(&mut candidates7, true, '"', false);
+        assert_eq!(candidates7[0].replacement, "in dex.txt\""); // 只应该有一个结尾引号
+
+        // 场景8：补全结果只带开头引号（Windows FilenameCompleter 常见行为）
+        let mut candidates8 = vec![Pair {
+            display: "in dex.txt".to_string(),
+            replacement: "\"in dex.txt".to_string(), // 只有开头引号
+        }];
+        apply_quote_policy(&mut candidates8, true, '"', false);
+        assert_eq!(candidates8[0].replacement, "in dex.txt\"");
     }
 
     /// 测试 @alias 子路径补全在含特殊字符路径下统一加引号
@@ -933,6 +1007,67 @@ mod tests {
                 assert!(cand.replacement.starts_with('"') && cand.replacement.ends_with('"'), "含空格路径应正常加引号");
             }
         }
+    }
+
+    /// 测试引号内路径补全不会出现双重结尾引号
+    #[test]
+    fn test_quote_inner_path_completion_no_double_quotes() {
+        use std::fs;
+        let helper = create_helper();
+        let history = MemHistory::default();
+        let ctx = Context::new(&history);
+
+        // 创建测试目录结构
+        let tmp_root = std::env::temp_dir().join("rfe_test_quote_inner");
+        let _ = fs::remove_dir_all(&tmp_root);
+        let sub_dir = tmp_root.join("te sts");
+        fs::create_dir_all(&sub_dir).unwrap();
+        fs::write(sub_dir.join("in dex.txt"), "test").unwrap();
+
+        // 切换到测试目录
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&tmp_root).unwrap();
+
+        // 场景1：用户输入 cd "te sts\in，光标在 n 后
+        // 期望补全后是 cd "te sts\in dex.txt" 而不是 cd "te sts\in dex.txt""
+        let line1 = r#"cd "te sts\in"#;
+        let pos1 = line1.len(); // 光标在 n 后
+        println!("Test 1: Input line: '{}', pos: {}", line1, pos1);
+        
+        let result1 = helper.complete(line1, pos1, &ctx).unwrap();
+        let start_pos1 = result1.0;
+        
+        println!("  Found {} candidates, start_pos: {}", result1.1.len(), start_pos1);
+        for (i, cand) in result1.1.iter().enumerate() {
+            let full_result = format!("{}{}", &line1[..start_pos1], cand.replacement);
+            println!("    Candidate {}: full_result='{}'", i, full_result);
+            assert!(!full_result.ends_with(r#""""#), "Test 1 failed: '{}'", full_result);
+        }
+
+        // 场景2：用户输入 cd "te sts\in"，光标在 n 后（即输入有结尾引号，但光标在引号前面）
+        let line2 = r#"cd "te sts\in""#; // 结尾有引号
+        let pos2 = line2.len() - 1; // 光标在 n 后面（引号前面）
+        println!("\nTest 2: Input line: '{}', pos: {} (char at pos: '{}')", 
+                 line2, pos2, line2.chars().nth(pos2).unwrap_or(' '));
+        
+        let result2 = helper.complete(line2, pos2, &ctx).unwrap();
+        let start_pos2 = result2.0;
+        
+        println!("  Found {} candidates, start_pos: {}", result2.1.len(), start_pos2);
+        for (i, cand) in result2.1.iter().enumerate() {
+            let full_result = format!("{}{}{}", 
+                &line2[..start_pos2], 
+                cand.replacement,
+                &line2[pos2..]); // 光标后面的内容（即结尾引号）
+            println!("    Candidate {}: full_result='{}'", i, full_result);
+            assert!(!full_result.ends_with(r#""""#), "Test 2 failed: '{}'", full_result);
+        }
+        
+        // （这部分已移到上面的场景中）
+
+        // 清理
+        std::env::set_current_dir(&original_dir).unwrap();
+        let _ = fs::remove_dir_all(&tmp_root);
     }
 
     /// 测试闭合引号后加斜杠补全子目录正常
