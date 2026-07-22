@@ -166,11 +166,6 @@ pub fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
             "mkdf -h/--help".truecolor(255, 182, 193).bold()
         ));
         output.push_str(&format!(
-            "  {}   Search recursively with regex 💫\n",
-            "ls --re-deep <pattern>".truecolor(255, 182, 193).bold()
-        ));
-
-        output.push_str(&format!(
             "  {}  Switch to standard mode ✨\n",
             "change -std".truecolor(255, 182, 193).bold()
         ));
@@ -491,11 +486,6 @@ pub fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
             "  {}     Show mkdf command help\n\n",
             "mkdf -h/--help".cyan().bold()
         ));
-        output.push_str(&format!(
-            "  {}   Search recursively with regex\n",
-            "ls --re-deep <pattern>".cyan().bold()
-        ));
-
         output.push_str(&format!(
             "  {}  Switch to standard mode\n",
             "change -std".cyan().bold()

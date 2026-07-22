@@ -82,8 +82,8 @@ fn format_tag_usage() -> String {
         "tag backup".cyan().bold()
     ));
     output.push_str(&format!(
-        "  {}                        Restore tag data from backup\n",
-        "tag backup".cyan().bold()
+        "  {}                       Restore tag data from backup\n",
+        "tag restore".cyan().bold()
     ));
     output
 }
