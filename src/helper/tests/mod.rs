@@ -12,13 +12,22 @@ use crate::managers::alias::AliasManager;
 use crate::managers::tag::TagManager;
 use rustyline::completion::FilenameCompleter;
 use std::sync::{Arc, Mutex};
+use tempfile::TempDir;
 
-fn create_helper() -> RfeHelper {
-    RfeHelper {
+/// 构造测试用 RfeHelper：管理器配置隔离到临时目录（不触碰真实用户配置），
+/// 返回的 TempDir 守卫需由调用方持有至测试结束
+fn create_helper() -> (TempDir, RfeHelper) {
+    let config = TempDir::new().unwrap();
+    let helper = RfeHelper {
         completer: FilenameCompleter::new(),
-        alias_manager: Arc::new(Mutex::new(AliasManager::new().unwrap())),
-        tag_manager: Arc::new(Mutex::new(TagManager::new().unwrap())),
+        alias_manager: Arc::new(Mutex::new(
+            AliasManager::with_config_dir(config.path().to_path_buf()).unwrap(),
+        )),
+        tag_manager: Arc::new(Mutex::new(
+            TagManager::with_config_dir(config.path().to_path_buf()).unwrap(),
+        )),
         last_ls_items: Arc::new(Mutex::new(Vec::new())),
         completion_manager: CompletionManager::new(),
-    }
+    };
+    (config, helper)
 }

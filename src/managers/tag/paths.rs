@@ -85,3 +85,69 @@ pub(super) fn migrate_unc_paths(tags: &mut HashMap<String, Vec<String>>) -> bool
     *tags = new_tags;
     need_migrate
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn test_is_index_placeholder() {
+        assert!(is_index_placeholder(Path::new(".index")));
+        assert!(is_index_placeholder(Path::new("folder1/.index")));
+        assert!(is_index_placeholder(Path::new("folder1\\.index")));
+        assert!(!is_index_placeholder(Path::new("index")));
+        assert!(!is_index_placeholder(Path::new("a.index")));
+        assert!(!is_index_placeholder(Path::new(".index2")));
+        assert!(!is_index_placeholder(Path::new("folder1")));
+    }
+
+    #[test]
+    fn test_lexical_absolute_resolves_relative_against_cwd() {
+        let cwd = std::env::current_dir().unwrap();
+        let result = lexical_absolute(Path::new(".index")).unwrap();
+        assert_eq!(result, cwd.join(".index").to_string_lossy().to_string());
+    }
+
+    #[test]
+    fn test_lexical_absolute_skips_curdir_and_pops_parentdir() {
+        let cwd = std::env::current_dir().unwrap();
+        let result = lexical_absolute(Path::new("a/./b/../.index")).unwrap();
+        let expected = cwd.join("a").join(".index").to_string_lossy().to_string();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_lexical_absolute_clamps_parent_at_root() {
+        // 向上弹出 .. 时不越过根目录（与 canonicalize 行为一致）
+        let cwd = std::env::current_dir().unwrap();
+        let root = cwd.ancestors().last().unwrap();
+        let mut beyond_root = root.to_path_buf();
+        beyond_root.push("..");
+        beyond_root.push(".index");
+        let result = lexical_absolute(&beyond_root).unwrap();
+        let expected = root.join(".index").to_string_lossy().to_string();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_normalize_path_missing_placeholder_uses_lexical() {
+        let dir = tempfile::tempdir().unwrap();
+        let placeholder = dir.path().join("sub").join("..").join(".index");
+        let result = normalize_path(placeholder.to_str().unwrap()).unwrap();
+        let expected = dir.path().join(".index").to_string_lossy().to_string();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_normalize_path_existing_file_strips_unc_prefix() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("f.txt");
+        std::fs::File::create(&file).unwrap();
+
+        let result = normalize_path(file.to_str().unwrap()).unwrap();
+        let canon = std::fs::canonicalize(&file).unwrap().to_string_lossy().to_string();
+        let canon = canon.strip_prefix("\\\\?\\").map(str::to_string).unwrap_or(canon);
+        assert_eq!(result, canon);
+    }
+}

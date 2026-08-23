@@ -137,3 +137,27 @@ pub fn build_command_definitions() -> Vec<CommandDef> {
             .with_alias("q"),
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cd_definition_uses_unified_tag_flag() {
+        let defs = build_command_definitions();
+        let cd = defs.iter().find(|d| d.name == "cd").unwrap();
+        let flags: Vec<&str> = cd.args.iter().map(|a| a.name.as_str()).collect();
+        assert!(flags.contains(&"-tag"), "cd should expose -tag: {:?}", flags);
+        assert!(!flags.contains(&"-idx"), "cd must not expose -idx: {:?}", flags);
+    }
+
+    #[test]
+    fn test_open_and_ls_tag_flags_unchanged() {
+        let defs = build_command_definitions();
+        let open = defs.iter().find(|d| d.name == "open").unwrap();
+        assert!(open.args.iter().any(|a| a.name == "-tag"));
+        let ls = defs.iter().find(|d| d.name == "ls").unwrap();
+        assert!(ls.args.iter().any(|a| a.name == "-tag"));
+        assert!(ls.args.iter().any(|a| a.name == "-t"));
+    }
+}

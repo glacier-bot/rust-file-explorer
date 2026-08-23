@@ -8,7 +8,7 @@ use rustyline::Context;
 /// 测试 RfeHelper 对无引号但包含空格的路径补充结尾引号
 #[test]
 fn test_rfe_helper_no_quote_adds_closing_quote() {
-    let helper = create_helper();
+    let (_config, helper) = create_helper();
     let history = MemHistory::default();
     let ctx = Context::new(&history);
 
@@ -61,7 +61,7 @@ fn test_rfe_helper_no_quote_adds_closing_quote() {
 // #[test]
 #[allow(dead_code)]
 fn test_rfe_helper_in_double_quote_no_extra_quote() {
-    let helper = create_helper();
+    let (_config, helper) = create_helper();
     let history = MemHistory::default();
     let ctx = Context::new(&history);
 
@@ -103,7 +103,7 @@ fn test_rfe_helper_in_double_quote_no_extra_quote() {
 /// 测试普通路径补全也添加引号（统一策略）
 #[test]
 fn test_rfe_helper_normal_path_with_quote() {
-    let helper = create_helper();
+    let (_config, helper) = create_helper();
     let history = MemHistory::default();
     let ctx = Context::new(&history);
 
@@ -130,7 +130,7 @@ fn test_rfe_helper_normal_path_with_quote() {
 // #[test]
 #[allow(dead_code)]
 fn test_rfe_helper_file_with_spaces_in_quotes() {
-    let helper = create_helper();
+    let (_config, helper) = create_helper();
     let history = MemHistory::default();
     let ctx = Context::new(&history);
 
@@ -170,7 +170,7 @@ fn test_rfe_helper_file_with_spaces_in_quotes() {
 // #[test]
 #[allow(dead_code)]
 fn test_rfe_helper_in_single_quote_no_extra_quote() {
-    let helper = create_helper();
+    let (_config, helper) = create_helper();
     let history = MemHistory::default();
     let ctx = Context::new(&history);
 
@@ -210,7 +210,7 @@ fn test_rfe_helper_in_single_quote_no_extra_quote() {
 /// 测试双引号已闭合情况下不再添加引号
 #[test]
 fn test_rfe_helper_already_closed_quote_no_extra_quote() {
-    let helper = create_helper();
+    let (_config, helper) = create_helper();
     let history = MemHistory::default();
     let ctx = Context::new(&history);
 
@@ -251,7 +251,7 @@ fn test_rfe_helper_already_closed_quote_no_extra_quote() {
 /// 测试嵌套引号场景
 #[test]
 fn test_rfe_helper_complex_quote_scenarios() {
-    let helper = create_helper();
+    let (_config, helper) = create_helper();
     let history = MemHistory::default();
     let ctx = Context::new(&history);
 

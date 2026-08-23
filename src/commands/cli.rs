@@ -242,3 +242,47 @@ pub fn get_mkdf_args(args: &[String], arg_offset: usize) -> Vec<&str> {
 pub fn get_change_args(args: &[String], arg_offset: usize) -> Vec<&str> {
     args[arg_offset + 1..].iter().map(|s| s.as_str()).collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::{tempdir, TempDir};
+
+    /// 构造配置隔离的 AliasManager 及其临时目录（目录随测试结束自动清理）
+    fn test_alias_manager() -> (TempDir, AliasManager) {
+        let dir = tempdir().unwrap();
+        let manager = AliasManager::with_config_dir(dir.path().to_path_buf()).unwrap();
+        (dir, manager)
+    }
+
+    #[test]
+    fn test_parse_cd_args_accepts_unified_tag_flag() {
+        let (_dir, manager) = test_alias_manager();
+        let args: Vec<String> = ["rfe", "cd", "-tag", "work"].iter().map(|s| s.to_string()).collect();
+        let parsed = parse_cd_args(&args, 1, &manager).unwrap();
+        assert!(parsed.is_idx);
+        assert_eq!(parsed.idx_tag.as_deref(), Some("work"));
+        assert!(parsed.path.is_none());
+    }
+
+    #[test]
+    fn test_parse_cd_args_removed_idx_flag_is_treated_as_path() {
+        let (_dir, manager) = test_alias_manager();
+        let args: Vec<String> = ["rfe", "cd", "-idx", "work"].iter().map(|s| s.to_string()).collect();
+        let parsed = parse_cd_args(&args, 1, &manager).unwrap();
+        // -idx 已统一移除：按普通路径参数处理，不再触发按标签跳转
+        assert!(!parsed.is_idx);
+        assert_eq!(parsed.idx_tag, None);
+        assert_eq!(parsed.path.as_deref(), Some("-idx work"));
+    }
+
+    #[test]
+    fn test_parse_cd_args_plain_path() {
+        let (_dir, manager) = test_alias_manager();
+        let args: Vec<String> = ["rfe", "cd", "src"].iter().map(|s| s.to_string()).collect();
+        let parsed = parse_cd_args(&args, 1, &manager).unwrap();
+        assert!(!parsed.is_idx);
+        assert_eq!(parsed.idx_tag, None);
+        assert_eq!(parsed.path.as_deref(), Some("src"));
+    }
+}

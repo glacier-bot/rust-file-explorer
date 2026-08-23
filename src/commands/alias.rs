@@ -92,3 +92,20 @@ pub fn cmd_alias(
         _ => Err(format!("Unknown alias subcommand: {}", args[0]).into()),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_bare_alias_shows_cache_file_path() {
+        let config = tempdir().unwrap();
+        let mut alias_manager = AliasManager::with_config_dir(config.path().to_path_buf()).unwrap();
+
+        let (display, _) = cmd_alias(&mut alias_manager, &[]).unwrap();
+        let expected = config.path().join("aliases.json").display().to_string();
+        assert!(display.contains("Cache file:"), "{}", display);
+        assert!(display.contains(&expected), "{}", display);
+    }
+}

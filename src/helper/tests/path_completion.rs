@@ -10,7 +10,7 @@ use rustyline::Context;
 #[test]
 fn test_alias_sub_path_completion_with_special_chars() {
     use std::fs;
-    let helper = create_helper();
+    let (_config, helper) = create_helper();
     let history = MemHistory::default();
     let ctx = Context::new(&history);
 
@@ -56,7 +56,7 @@ fn test_alias_sub_path_completion_with_special_chars() {
 #[test]
 fn test_default_completion_quotes_parentheses() {
     use std::fs;
-    let helper = create_helper();
+    let (_config, helper) = create_helper();
     let history = MemHistory::default();
     let ctx = Context::new(&history);
 
@@ -89,7 +89,7 @@ fn test_default_completion_quotes_parentheses() {
 #[test]
 fn test_cd_r_with_both_separators() {
     use std::fs;
-    let helper = create_helper();
+    let (_config, helper) = create_helper();
     let history = MemHistory::default();
     let ctx = Context::new(&history);
 
@@ -145,7 +145,7 @@ fn test_cd_r_with_both_separators() {
 #[test]
 fn test_alias_completion_with_both_separators() {
     use std::fs;
-    let helper = create_helper();
+    let (_config, helper) = create_helper();
     let history = MemHistory::default();
     let ctx = Context::new(&history);
 
@@ -194,7 +194,7 @@ fn test_alias_completion_with_both_separators() {
 #[test]
 fn test_cd_r_deep_subpath_completion() {
     use std::fs;
-    let helper = create_helper();
+    let (_config, helper) = create_helper();
     let history = MemHistory::default();
     let ctx = Context::new(&history);
 

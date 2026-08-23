@@ -229,3 +229,29 @@ pub fn cmd_tag(
         _ => Err(format!("Unknown tag subcommand: {}", args[0]).into()),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_bare_tag_shows_cache_file_path() {
+        let config = tempdir().unwrap();
+        let mut tag_manager = TagManager::with_config_dir(config.path().to_path_buf()).unwrap();
+
+        let (display, _) = cmd_tag(&mut tag_manager, &[]).unwrap();
+        let expected = config.path().join("tags.json").display().to_string();
+        assert!(display.contains("Cache file:"), "{}", display);
+        assert!(display.contains(&expected), "{}", display);
+    }
+
+    #[test]
+    fn test_tag_list_subcommand_has_no_cache_path_line() {
+        let config = tempdir().unwrap();
+        let mut tag_manager = TagManager::with_config_dir(config.path().to_path_buf()).unwrap();
+
+        let (display, _) = cmd_tag(&mut tag_manager, &["list"]).unwrap();
+        assert!(!display.contains("Cache file:"), "{}", display);
+    }
+}

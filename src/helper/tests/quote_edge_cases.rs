@@ -8,7 +8,7 @@ use rustyline::Context;
 /// 测试以斜杠结尾的目录补全应添加结尾引号
 #[test]
 fn test_rfe_helper_directory_trailing_slash_with_closing_quote() {
-    let helper = create_helper();
+    let (_config, helper) = create_helper();
     let history = MemHistory::default();
     let ctx = Context::new(&history);
 
@@ -62,7 +62,7 @@ fn test_rfe_helper_directory_trailing_slash_with_closing_quote() {
 /// 测试光标在闭合双引号后补全为空
 #[test]
 fn test_rfe_helper_no_completion_after_closed_double_quote() {
-    let helper = create_helper();
+    let (_config, helper) = create_helper();
     let history = MemHistory::default();
     let ctx = Context::new(&history);
 
@@ -77,7 +77,7 @@ fn test_rfe_helper_no_completion_after_closed_double_quote() {
 /// 测试光标在闭合单引号后补全为空
 #[test]
 fn test_rfe_helper_no_completion_after_closed_single_quote() {
-    let helper = create_helper();
+    let (_config, helper) = create_helper();
     let history = MemHistory::default();
     let ctx = Context::new(&history);
 
@@ -92,7 +92,7 @@ fn test_rfe_helper_no_completion_after_closed_single_quote() {
 /// 测试闭合引号后加空格补全第二个路径正常（多路径命令兼容）
 #[test]
 fn test_rfe_helper_completion_after_closed_quote_with_space() {
-    let helper = create_helper();
+    let (_config, helper) = create_helper();
     let history = MemHistory::default();
     let ctx = Context::new(&history);
 
@@ -116,7 +116,7 @@ fn test_rfe_helper_completion_after_closed_quote_with_space() {
 #[test]
 fn test_quote_inner_path_completion_no_double_quotes() {
     use std::fs;
-    let helper = create_helper();
+    let (_config, helper) = create_helper();
     let history = MemHistory::default();
     let ctx = Context::new(&history);
 
@@ -177,7 +177,7 @@ fn test_quote_inner_path_completion_no_double_quotes() {
 // #[test]
 #[allow(dead_code)]
 fn test_rfe_helper_completion_after_closed_quote_with_slash() {
-    let helper = create_helper();
+    let (_config, helper) = create_helper();
     let history = MemHistory::default();
     let ctx = Context::new(&history);
 
@@ -196,7 +196,7 @@ fn test_rfe_helper_completion_after_closed_quote_with_slash() {
 // #[test]
 #[allow(dead_code)]
 fn test_rfe_helper_no_double_quotes_for_space_path() {
-    let helper = create_helper();
+    let (_config, helper) = create_helper();
     let history = MemHistory::default();
     let ctx = Context::new(&history);
 
