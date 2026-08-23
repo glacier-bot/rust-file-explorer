@@ -2,7 +2,7 @@ use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{Read, Write};
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 
 pub struct TagManager {
     pub tags: HashMap<String, Vec<String>>,
@@ -60,6 +60,9 @@ impl TagManager {
     
     fn normalize_path(path: &str) -> Result<String, Box<dyn std::error::Error>> {
         let path_buf = PathBuf::from(path);
+        if !path_buf.exists() && Self::is_index_placeholder(&path_buf) {
+            return Self::lexical_absolute(&path_buf);
+        }
         let abs_path = fs::canonicalize(&path_buf)?;
         let mut path_str = abs_path.to_string_lossy().to_string();
         
@@ -74,6 +77,33 @@ impl TagManager {
         Ok(path_str)
     }
     
+    /// 判断路径是否为 .index 占位符（目录标签约定）
+    fn is_index_placeholder(path: &Path) -> bool {
+        matches!(path.file_name(), Some(name) if name == ".index")
+    }
+
+    /// 词法绝对化：不依赖文件实际存在，跳过 . 分量并向上弹出 .. 分量
+    fn lexical_absolute(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+        let abs = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            std::env::current_dir()?.join(path)
+        };
+
+        let mut normalized = PathBuf::new();
+        for component in abs.components() {
+            match component {
+                Component::CurDir => {}
+                Component::ParentDir => {
+                    normalized.pop();
+                }
+                other => normalized.push(other),
+            }
+        }
+
+        Ok(normalized.to_string_lossy().to_string())
+    }
+
     fn convert_unc_path_to_normal(path: &str) -> String {
         let mut path_str = path.to_string();
         
@@ -151,11 +181,12 @@ impl TagManager {
     
     pub fn add_tags(&mut self, file_path: &str, tags: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
         let path = PathBuf::from(file_path);
-        if !path.exists() {
+        let is_placeholder = Self::is_index_placeholder(&path);
+        if !is_placeholder && !path.exists() {
             return Err(format!("File does not exist: {}", file_path).into());
         }
         
-        if path.is_dir() {
+        if !is_placeholder && path.is_dir() {
             return Err(format!("Cannot add tags to directory: {}. Tags can only be added to files.", file_path).into());
         }
         
@@ -184,11 +215,12 @@ impl TagManager {
     
     pub fn remove_tags(&mut self, file_path: &str, tags: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
         let path = PathBuf::from(file_path);
-        if !path.exists() {
+        let is_placeholder = Self::is_index_placeholder(&path);
+        if !is_placeholder && !path.exists() {
             return Err(format!("File does not exist: {}", file_path).into());
         }
 
-        if path.is_dir() {
+        if !is_placeholder && path.is_dir() {
             return Err(format!("Cannot remove tags from directory: {}. Tags can only be removed from files.", file_path).into());
         }
 
@@ -212,11 +244,12 @@ impl TagManager {
 
     pub fn remove_all_tags(&mut self, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
         let path = PathBuf::from(file_path);
-        if !path.exists() {
+        let is_placeholder = Self::is_index_placeholder(&path);
+        if !is_placeholder && !path.exists() {
             return Err(format!("File does not exist: {}", file_path).into());
         }
 
-        if path.is_dir() {
+        if !is_placeholder && path.is_dir() {
             return Err(format!("Cannot remove tags from directory: {}. Tags can only be removed from files.", file_path).into());
         }
 

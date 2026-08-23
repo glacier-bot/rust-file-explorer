@@ -1,9 +1,8 @@
 use crate::commands::find_index_dirs_by_tag;
 use crate::managers::tag::TagManager;
-use crate::messaging;
 use colored::*;
 use std::env;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub struct CdSelectionItem {
@@ -81,7 +80,6 @@ fn cmd_cd_idx(
     if matching_dirs.len() == 1 {
         let item = &matching_dirs[0];
         let target = PathBuf::from(&item.full_path);
-        check_index_file(&target);
         return change_to_dir(&target);
     }
 
@@ -105,7 +103,6 @@ fn cmd_cd_idx(
             .into());
         }
 
-        check_index_file(&target);
         return change_to_dir(&target);
     }
 
@@ -124,13 +121,6 @@ fn change_to_dir(target: &PathBuf) -> Result<CdResult, Box<dyn std::error::Error
     let plain_path = target.display().to_string();
     let display = format!("{} {}", "Changed to:".green(), plain_path.cyan());
     Ok(CdResult::Success(display, plain_path, new_previous_dir))
-}
-
-fn check_index_file(dir_path: &Path) {
-    let index_path = dir_path.join(".index");
-    if !index_path.exists() {
-        messaging::print_missing_index_warning(&dir_path.display().to_string());
-    }
 }
 
 pub fn render_selection_list(items: &[CdSelectionItem]) -> String {

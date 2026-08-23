@@ -116,27 +116,6 @@ pub fn format_changed_to(path: &str) -> String {
     format!("{} {}", "Changed to:".green(), path.cyan())
 }
 
-/// 格式化 .index 文件缺失警告（moe 模式）
-pub fn format_moe_missing_index(dir_path: &str) -> String {
-    format!(
-        "{} {} {} {}",
-        "✨".truecolor(255, 182, 193),
-        "Warning!".truecolor(255, 105, 180).bold(),
-        "Missing .index file in folder nya~ 💕".truecolor(255, 182, 193),
-        format!("({})", dir_path).truecolor(255, 160, 122)
-    )
-}
-
-/// 格式化 .index 文件缺失警告（标准模式）
-pub fn format_std_missing_index(dir_path: &str) -> String {
-    format!(
-        "{} {} {}",
-        "⚠".yellow().bold(),
-        "Warning: Missing .index file in folder".yellow().bold(),
-        format!("({})", dir_path).yellow()
-    )
-}
-
 /// 获取 moe 模式下的彩色字符串
 #[allow(dead_code)]
 pub fn moe_style(text: &str, color: Color) -> ColoredString {
