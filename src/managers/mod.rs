@@ -1,6 +1,20 @@
 pub mod alias;
 pub mod tag;
 
+use std::path::PathBuf;
+
+/// 返回 rfe 配置目录：优先 RFE_CONFIG_DIR 环境变量，否则为系统配置目录下的 rfe 子目录
+pub fn config_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    if let Ok(dir) = std::env::var("RFE_CONFIG_DIR") {
+        if !dir.is_empty() {
+            return Ok(PathBuf::from(dir));
+        }
+    }
+    Ok(dirs::config_dir()
+        .ok_or("Could not find config directory")?
+        .join("rfe"))
+}
+
 #[cfg(test)]
 mod tests { 
    use super::*;

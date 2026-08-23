@@ -62,3 +62,12 @@ pub fn print_selection_cancelled() {
 pub fn format_changed_to(path: &str) -> String {
     messaging_utils::format_changed_to(path)
 }
+
+/// 格式化缓存文件位置行
+pub fn format_cache_file_note(path: &std::path::Path) -> String {
+    format!(
+        "\n  {} {}\n",
+        "Cache file:".bright_black(),
+        path.display().to_string().cyan()
+    )
+}

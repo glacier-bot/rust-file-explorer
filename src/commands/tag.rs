@@ -1,4 +1,5 @@
 use crate::managers::tag::TagManager;
+use crate::messaging;
 use colored::*;
 use regex::Regex;
 use std::env;
@@ -84,6 +85,7 @@ pub fn cmd_tag(
         let mut output = format!("{}\n\n", "🏷️  Tag List:".bright_yellow().bold());
         output.push_str(&format_tag_list(tag_manager));
         output.push_str(&format_tag_usage());
+        output.push_str(&messaging::format_cache_file_note(&tag_manager.config_path));
         return Ok((output, String::new()));
     }
 

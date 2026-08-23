@@ -1,4 +1,5 @@
 use crate::managers::alias::AliasManager;
+use crate::messaging;
 use colored::*;
 
 #[inline]
@@ -46,6 +47,7 @@ pub fn cmd_alias(
         let mut output = format!("{}\n\n", "📛 Alias List:".bright_yellow().bold());
         output.push_str(&format_alias_list(alias_manager));
         output.push_str(&format_alias_usage());
+        output.push_str(&messaging::format_cache_file_note(&alias_manager.config_path));
         return Ok((output, String::new()));
     }
 

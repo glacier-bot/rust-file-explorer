@@ -12,9 +12,12 @@ pub struct TagManager {
 
 impl TagManager {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let config_dir = dirs::config_dir()
-            .ok_or("Could not find config directory")?
-            .join("rfe");
+        Self::with_config_dir(super::config_dir()?)
+    }
+
+    /// 使用指定配置目录构造（便于测试隔离）
+    #[allow(dead_code)]
+    pub fn with_config_dir(config_dir: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
         fs::create_dir_all(&config_dir)?;
         let config_path = config_dir.join("tags.json");
         let backup_path = config_dir.join("tags.json.bak");
