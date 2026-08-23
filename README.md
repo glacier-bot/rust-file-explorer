@@ -71,7 +71,7 @@
 | **占位符（`{}`）**           | 将前序输出插入任意参数位置                           | `cppwd -> alias add home {}`              |
 | **POP 展开（`{}.pop`）**     | 在路径上向上回退 N 级目录                            | `cpf src/main.rs -> cd {}.pop` 跳到项目根 |
 | **标签管理（`tag`）**        | 为文件打多标签，支持正则检索与批量筛选               | `tag find "rust\|work"` 跨目录检索        |
-| **标签目录约定（`.index`）** | 借助 `.index` 文件让目录参与标签体系，实现按标签跳转 | `cd -idx work` 跳转到标签为 work 的目录   |
+| **标签目录约定（`.index`）** | 借助 `.index` 占位约定让目录参与标签体系，实现按标签跳转 | `cd -tag work` 跳转到标签为 work 的目录   |
 | **Shell 集成**               | 未识别命令自动转发系统 shell，目录变更自动同步       | `dir | findstr .rs -> echo Got: {}`       |
 | **智能命令补全**             | 命令名、参数、子命令自动补全，两种模式配色区分明显   | 输入 `ls -` 按 `Tab` 查看所有参数选项     |
 | **双运行模式**               | 交互式 REPL（补全 / 历史 / ESC 清空）与单次命令执行  | 连续操作用 REPL，脚本调用用单次           |
@@ -398,7 +398,7 @@ c<Tab>    # → cd / cppwd / clear / change
 
 # 参数补全：输入命令后按 - 再按 Tab 查看所有可用选项
 ls -<Tab>     # → -a -l -la -t --re --tags ...
-cd -<Tab>     # → -b -back -r -idx ...
+cd -<Tab>     # → -b -back -r -tag ...
 
 # 子命令补全
 tag a<Tab>    # → tag add
@@ -540,17 +540,16 @@ cppwd -> alias add current {} -> ls @current
 
 ### 标签目录约定（`.index`）
 
-rfe 的标签系统作用于**文件**而非目录。借助 `.index` 文件约定，可让目录也参与标签体系，并配合 `cd -idx` 实现按标签跳转。
+rfe 的标签系统作用于**文件**而非目录。借助 `.index` 占位约定，可让目录也参与标签体系，并配合 `cd -tag` 实现按标签跳转。
+
+> **纯占位符**：`.index` 无需真实存在。直接对 `<目录>/.index` 打标签即可，rfe 会将其视为该目录的逻辑占位符，不会在磁盘上创建任何文件（若 `.index` 文件真实存在，行为同样兼容）。
 
 ```bash
-# 1. 在目标目录下创建 .index 占位文件
-mkdf -f /path/to/folder/.index
-
-# 2. 为 .index 文件打标签
+# 1. 直接为目标目录打标签（无需创建 .index 文件）
 tag add /path/to/folder/.index work project important
 
-# 3. 按标签跳转 / 检索
-cd -idx work               # 直接跳转
+# 2. 按标签跳转 / 检索
+cd -tag work               # 直接跳转
 open -tag work             # 直接在资源管理器中打开
 tag find work project      # 全局搜索匹配的目录
 ls -t work                 # 当前目录下按标签过滤
@@ -560,9 +559,6 @@ ls -t work                 # 当前目录下按标签过滤
 
 - **全局 / 磁盘级路径**：优先使用 `alias`。别名全局持久化，适合高频、跨项目的通用路径。
 - **项目 / 文件夹级路径**：优先使用 `.index` 标签约定。标签与目录绑定，随项目移动 / 删除自动生效 / 失效，更适合项目级别的路径管理。
-- **隐藏属性**：创建 `.index` 后建议设置隐藏属性，避免干扰文件列表：
-  - Windows：`attrib +h .index`
-  - Linux / macOS：以 `.` 开头的文件默认隐藏，无需额外操作
 
 ---
 
@@ -582,7 +578,7 @@ ls -t work                 # 当前目录下按标签过滤
 | 问题                            | 可能原因                     | 解决方案                                                         |
 | ------------------------------- | ---------------------------- | ---------------------------------------------------------------- |
 | `-r` 参数无效或提示"行号不存在" | 未先执行 `ls` / 行号已过期   | 先执行 `ls` 查看最新行号；`-r` 仅在 REPL 模式下可用              |
-| `cd -idx <tag>` 无反应或报错    | 目标目录不存在 `.index` 文件 | 在目标目录下创建 `.index` 文件并为其添加标签                     |
+| `cd -tag <tag>` 无反应或报错    | 没有匹配该标签的 `.index` 占位符 | 先为目标目录打标签：`tag add <目录>/.index <tag>`（无需创建实体文件） |
 | 别名 `@<name>` 无法解析         | 别名未添加 / 拼写错误        | 使用 `alias list` 检查已有别名；注意区分大小写                   |
 | 标签数据丢失                    | 异常退出 / 手动误删          | 检查配置目录下的 `.bak` 备份文件，执行 `tag restore` 恢复        |
 | 萌系模式 `-moe` 无颜色输出      | 终端不支持 ANSI 颜色         | 更换终端（Windows Terminal、iTerm2、GNOME Terminal 等）          |
@@ -650,6 +646,8 @@ ls -t work                 # 当前目录下按标签过滤
 | Windows       | `%APPDATA%\rfe\aliases.json`、`%APPDATA%\rfe\tags.json`（含 `.bak`） |
 | Linux / macOS | `~/.config/rfe/aliases.json`、`~/.config/rfe/tags.json`（含 `.bak`） |
 
+> **提示**：运行不带参数的 `tag` 或 `alias` 命令时，输出末尾会显示对应缓存文件的存放位置。
+
 ---
 
 ## 贡献指南
@@ -671,9 +669,15 @@ ls -t work                 # 当前目录下按标签过滤
 ```bash
 cargo fmt               # 代码格式化
 cargo clippy            # 静态检查
-cargo test              # 单元测试
+cargo test              # 单元测试 + 集成测试
 cargo build --release   # 发布构建可通过
 ```
+
+### 测试
+
+- 单元测试与各模块同目录（`#[cfg(test)]` 模块），集成测试位于 `tests/integration.rs`（通过真实二进制端到端验证）。
+- 测试所需的 mock 文件与文件夹全部由 `tempfile` 临时创建并自动清理，仓库中不产生任何 mock 目录。
+- 配置目录通过 `RFE_CONFIG_DIR` 环境变量（集成测试按进程注入）与 `with_config_dir` 构造函数（单元测试）隔离，测试不会读写真实用户配置。
 
 ---
 
