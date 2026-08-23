@@ -2,7 +2,9 @@ use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{Read, Write};
-use std::path::{Component, Path, PathBuf};
+use std::path::PathBuf;
+
+mod paths;
 
 pub struct TagManager {
     pub tags: HashMap<String, Vec<String>>,
@@ -21,9 +23,9 @@ impl TagManager {
         fs::create_dir_all(&config_dir)?;
         let config_path = config_dir.join("tags.json");
         let backup_path = config_dir.join("tags.json.bak");
-        
+
         let mut tags = HashMap::new();
-        
+
         if config_path.exists() {
             match Self::load_from_file(&config_path) {
                 Ok(loaded_tags) => tags = loaded_tags,
@@ -49,120 +51,42 @@ impl TagManager {
                 eprintln!("⚠️  Tag file missing, restored from backup.");
             }
         }
-        
-        let need_save = Self::migrate_unc_paths(&mut tags);
-        
+
+        let need_save = paths::migrate_unc_paths(&mut tags);
+
         let manager = Self { tags, config_path, backup_path };
-        
+
         if need_save {
             let _ = manager.save();
         }
-        
+
         Ok(manager)
     }
-    
-    fn normalize_path(path: &str) -> Result<String, Box<dyn std::error::Error>> {
-        let path_buf = PathBuf::from(path);
-        if !path_buf.exists() && Self::is_index_placeholder(&path_buf) {
-            return Self::lexical_absolute(&path_buf);
-        }
-        let abs_path = fs::canonicalize(&path_buf)?;
-        let mut path_str = abs_path.to_string_lossy().to_string();
-        
-        if cfg!(windows) {
-            if path_str.starts_with("\\\\?\\UNC\\") {
-                path_str = format!("\\\\{}", &path_str[8..]);
-            } else if path_str.starts_with("\\\\?\\") {
-                path_str = path_str[4..].to_string();
-            }
-        }
-        
-        Ok(path_str)
-    }
-    
-    /// 判断路径是否为 .index 占位符（目录标签约定）
-    fn is_index_placeholder(path: &Path) -> bool {
-        matches!(path.file_name(), Some(name) if name == ".index")
-    }
 
-    /// 词法绝对化：不依赖文件实际存在，跳过 . 分量并向上弹出 .. 分量
-    fn lexical_absolute(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
-        let abs = if path.is_absolute() {
-            path.to_path_buf()
-        } else {
-            std::env::current_dir()?.join(path)
-        };
-
-        let mut normalized = PathBuf::new();
-        for component in abs.components() {
-            match component {
-                Component::CurDir => {}
-                Component::ParentDir => {
-                    normalized.pop();
-                }
-                other => normalized.push(other),
-            }
-        }
-
-        Ok(normalized.to_string_lossy().to_string())
-    }
-
-    fn convert_unc_path_to_normal(path: &str) -> String {
-        let mut path_str = path.to_string();
-        
-        if cfg!(windows) {
-            if path_str.starts_with("\\\\?\\UNC\\") {
-                path_str = format!("\\\\{}", &path_str[8..]);
-            } else if path_str.starts_with("UNC\\") {
-                path_str = format!("\\\\{}", &path_str[4..]);
-            } else if path_str.starts_with("\\\\?\\") {
-                path_str = path_str[4..].to_string();
-            }
-        }
-        
-        path_str
-    }
-    
-    fn migrate_unc_paths(tags: &mut HashMap<String, Vec<String>>) -> bool {
-        let mut need_migrate = false;
-        let mut new_tags = HashMap::new();
-        
-        for (path, tag_list) in tags.drain() {
-            let new_path = Self::convert_unc_path_to_normal(&path);
-            if new_path != path {
-                need_migrate = true;
-            }
-            new_tags.insert(new_path, tag_list);
-        }
-        
-        *tags = new_tags;
-        need_migrate
-    }
-    
     pub fn load_from_file(path: &PathBuf) -> Result<HashMap<String, Vec<String>>, Box<dyn std::error::Error>> {
         let mut file = File::open(path)?;
         let mut content = String::new();
         file.read_to_string(&mut content)?;
         Ok(serde_json::from_str(&content)?)
     }
-    
+
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
         let temp_path = self.config_path.with_extension("tmp");
         let content = serde_json::to_string_pretty(&self.tags)?;
-        
+
         let mut file = File::create(&temp_path)?;
         file.write_all(content.as_bytes())?;
         file.sync_all()?;
-        
+
         if self.config_path.exists() {
             fs::copy(&self.config_path, &self.backup_path)?;
         }
-        
+
         fs::rename(&temp_path, &self.config_path)?;
-        
+
         Ok(())
     }
-    
+
     pub fn backup(&self) -> Result<(), Box<dyn std::error::Error>> {
         if self.config_path.exists() {
             fs::copy(&self.config_path, &self.backup_path)?;
@@ -181,20 +105,20 @@ impl TagManager {
             Err("Backup file does not exist, cannot restore.".into())
         }
     }
-    
+
     pub fn add_tags(&mut self, file_path: &str, tags: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
         let path = PathBuf::from(file_path);
-        let is_placeholder = Self::is_index_placeholder(&path);
+        let is_placeholder = paths::is_index_placeholder(&path);
         if !is_placeholder && !path.exists() {
             return Err(format!("File does not exist: {}", file_path).into());
         }
-        
+
         if !is_placeholder && path.is_dir() {
             return Err(format!("Cannot add tags to directory: {}. Tags can only be added to files.", file_path).into());
         }
-        
-        let abs_path = Self::normalize_path(file_path)?;
-        
+
+        let abs_path = paths::normalize_path(file_path)?;
+
         for tag in tags {
                 if tag.is_empty() {
                     return Err("Tag cannot be empty.".into());
@@ -203,7 +127,7 @@ impl TagManager {
                     return Err(format!("Tag contains invalid characters: {}", tag).into());
                 }
             }
-        
+
         let existing_tags = self.tags.entry(abs_path).or_default();
         for tag in tags {
             let tag_str = tag.to_string();
@@ -211,14 +135,14 @@ impl TagManager {
                 existing_tags.push(tag_str);
             }
         }
-        
+
         self.save()?;
         Ok(())
     }
-    
+
     pub fn remove_tags(&mut self, file_path: &str, tags: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
         let path = PathBuf::from(file_path);
-        let is_placeholder = Self::is_index_placeholder(&path);
+        let is_placeholder = paths::is_index_placeholder(&path);
         if !is_placeholder && !path.exists() {
             return Err(format!("File does not exist: {}", file_path).into());
         }
@@ -227,7 +151,7 @@ impl TagManager {
             return Err(format!("Cannot remove tags from directory: {}. Tags can only be removed from files.", file_path).into());
         }
 
-        let abs_path = Self::normalize_path(file_path)?;
+        let abs_path = paths::normalize_path(file_path)?;
 
         if let Some(existing_tags) = self.tags.get_mut(&abs_path) {
             for tag in tags {
@@ -247,7 +171,7 @@ impl TagManager {
 
     pub fn remove_all_tags(&mut self, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
         let path = PathBuf::from(file_path);
-        let is_placeholder = Self::is_index_placeholder(&path);
+        let is_placeholder = paths::is_index_placeholder(&path);
         if !is_placeholder && !path.exists() {
             return Err(format!("File does not exist: {}", file_path).into());
         }
@@ -256,7 +180,7 @@ impl TagManager {
             return Err(format!("Cannot remove tags from directory: {}. Tags can only be removed from files.", file_path).into());
         }
 
-        let abs_path = Self::normalize_path(file_path)?;
+        let abs_path = paths::normalize_path(file_path)?;
 
         if self.tags.remove(&abs_path).is_some() {
             self.save()?;
@@ -265,16 +189,16 @@ impl TagManager {
             Err(format!("No tags found for this file: {}", file_path).into())
         }
     }
-    
+
     pub fn get_tags(&self, file_path: &str) -> Vec<String> {
-        match Self::normalize_path(file_path) {
+        match paths::normalize_path(file_path) {
             Ok(path_str) => {
                 self.tags.get(&path_str).cloned().unwrap_or_default()
             }
             Err(_) => Vec::new()
         }
     }
-    
+
     pub fn get_all_tags(&self) -> Vec<String> {
         let mut all_tags = HashSet::new();
         for tags in self.tags.values() {
@@ -284,13 +208,13 @@ impl TagManager {
         }
         all_tags.into_iter().collect()
     }
-    
+
     pub fn list_all(&self) -> &HashMap<String, Vec<String>> {
         &self.tags
     }
-    
+
     pub fn file_matches_tags(&self, file_path: &str, tag_patterns: &[Regex]) -> bool {
-        match Self::normalize_path(file_path) {
+        match paths::normalize_path(file_path) {
             Ok(path_str) => {
                 match self.tags.get(&path_str) {
                     Some(tags) => {
@@ -304,7 +228,7 @@ impl TagManager {
             Err(_) => false
         }
     }
-    
+
     pub fn find_files_by_tags(&self, tag_patterns: &[Regex]) -> Vec<(String, Vec<String>)> {
         let mut result = Vec::new();
         for (path, tags) in &self.tags {

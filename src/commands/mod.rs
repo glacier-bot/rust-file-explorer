@@ -14,15 +14,20 @@ pub mod clear;
 pub mod cli;
 pub mod clipboard;
 pub mod help;
+mod help_data;
 pub mod ls;
+mod ls_icons;
+mod ls_walk;
 pub mod mkdf;
 pub mod mv;
+mod mv_copy;
 pub mod open;
 pub mod pwd;
 pub mod render;
 pub mod shell;
 pub mod tag;
 pub mod welcome;
+mod welcome_data;
 
 pub fn find_index_dirs_by_tag(
     tag: &str,
