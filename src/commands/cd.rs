@@ -74,7 +74,7 @@ fn cmd_cd_idx(
     tag_manager: Option<&TagManager>,
     selection: Option<usize>,
 ) -> Result<CdResult, Box<dyn std::error::Error>> {
-    let tag = tag.ok_or("Usage: cd -idx <tag>")?;
+    let tag = tag.ok_or("Usage: cd -tag <tag>")?;
     let tag_manager = tag_manager.ok_or("Tag manager not available")?;
     let matching_dirs = find_index_dirs_by_tag(tag, tag_manager)?;
 

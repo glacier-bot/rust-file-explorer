@@ -173,7 +173,7 @@ pub fn build_command_definitions() -> Vec<CommandDef> {
             .with_arg(CommandArg::new("-b", ArgType::Flag, "Go back to previous directory"))
             .with_arg(CommandArg::new("-back", ArgType::Flag, "Go back to previous directory"))
             .with_arg(CommandArg::new("-r", ArgType::Value("<line_number>".to_string()), "Cd by ls line number"))
-            .with_arg(CommandArg::new("-idx", ArgType::Value("<tag>".to_string()), "Cd to directory with .index file matching tag"))
+            .with_arg(CommandArg::new("-tag", ArgType::Value("<tag>".to_string()), "Cd to directory with .index file matching tag"))
             .with_path_support(),
 
         // open 命令

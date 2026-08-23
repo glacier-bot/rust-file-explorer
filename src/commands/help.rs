@@ -115,7 +115,7 @@ pub fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
         ));
         output.push_str(&format!(
             "  {}   Jump to directory with .index file matching tag 🔖\n",
-            "cd -idx <tag>".truecolor(255, 182, 193).bold()
+            "cd -tag <tag>".truecolor(255, 182, 193).bold()
         ));
         output.push_str(&format!(
             "                      supports regex matching 💕\n\n"
@@ -433,7 +433,7 @@ pub fn cmd_help() -> Result<(String, String), Box<dyn std::error::Error>> {
         output.push_str(&format!("                      (short: -b, long: -back)\n"));
         output.push_str(&format!(
             "  {}   Jump to directory with .index file matching tag\n",
-            "cd -idx <tag>".cyan().bold()
+            "cd -tag <tag>".cyan().bold()
         ));
         output.push_str(&format!(
             "                      supports regex matching\n\n"

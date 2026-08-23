@@ -122,7 +122,7 @@ pub fn parse_cd_args(
     let mut i = arg_offset + 1;
     while i < args.len() {
         match args[i].as_str() {
-            "-idx" => {
+            "-tag" => {
                 is_idx = true;
                 if i + 1 < args.len() {
                     idx_tag = Some(args[i + 1].clone());

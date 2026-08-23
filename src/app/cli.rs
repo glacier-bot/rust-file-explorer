@@ -116,7 +116,7 @@ pub fn execute_single_command(
                 let mut i = 1;
                 while i < parts.len() {
                     match parts[i].as_str() {
-                        "-idx" => {
+                        "-tag" => {
                             is_idx = true;
                             if i + 1 < parts.len() {
                                 idx_tag = Some(parts[i + 1].clone());

@@ -101,7 +101,7 @@ fn format_standard_welcome() -> String {
     output.push('\n');
     output.push_str(&format!(
         "  {}  - Jump to directory with .index file matching tag",
-        "cd -idx <tag>".cyan().bold()
+        "cd -tag <tag>".cyan().bold()
     ));
     output.push('\n');
     output.push_str(&format!(
@@ -281,7 +281,7 @@ fn format_moe_welcome() -> String {
     output.push('\n');
     output.push_str(&format!(
         "  {}  - Jump to directory with .index file matching tag {}",
-        "cd -idx <tag>".truecolor(255, 182, 193).bold(),
+        "cd -tag <tag>".truecolor(255, 182, 193).bold(),
         "🔖"
     ));
     output.push('\n');
@@ -466,7 +466,7 @@ mod tests {
         assert!(display.contains("ls"));
         assert!(display.contains("pwd"));
         assert!(display.contains("cd"));
-        assert!(display.contains("cd -idx"));
+        assert!(display.contains("cd -tag"));
         assert!(display.contains("exit"));
         assert!(display.contains("help"));
         assert!(display.contains("Keyboard shortcuts"));
